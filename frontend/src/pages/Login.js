@@ -53,22 +53,24 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1e3a5f] via-slate-900 to-slate-950 p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        <div className="bg-white rounded-2xl shadow-2xl shadow-[#17a2b8]/10 p-8">
           {/* Logo */}
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-              <Compass className="w-8 h-8 text-slate-700" />
-            </div>
+            <img 
+              src="https://customer-assets.emergentagent.com/job_ecstatic-knuth-2/artifacts/u25di08h_GDC%20LOGO.jpg" 
+              alt="GDC Logo" 
+              className="h-20 w-auto"
+            />
           </div>
 
           {/* Title */}
           <h1 className="text-2xl font-semibold text-center text-slate-900 mb-2">
-            Welcome to LeadMachine GDC
+            Bienvenido a GDC
           </h1>
           <p className="text-center text-slate-600 mb-8 text-sm">
-            Sign in to continue
+            Inicia sesión para continuar
           </p>
 
           {/* Google Button */}
@@ -150,22 +152,22 @@ const Login = () => {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-slate-900 hover:bg-slate-800 text-white"
+              className="w-full h-11 bg-[#17a2b8] hover:bg-[#138a9d] text-white shadow-lg shadow-[#17a2b8]/30"
               disabled={loading}
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </Button>
           </form>
 
           {/* Footer Links */}
           <div className="flex justify-between items-center mt-6 text-sm">
-            <Link to="/forgot-password" className="text-slate-600 hover:text-slate-900">
-              Forgot password?
+            <Link to="/forgot-password" className="text-slate-600 hover:text-[#17a2b8]">
+              ¿Olvidaste tu contraseña?
             </Link>
             <div className="text-slate-600">
-              Need an account?{' '}
-              <Link to="/signup" className="text-slate-900 font-medium hover:underline">
-                Sign up
+              ¿No tienes cuenta?{' '}
+              <Link to="/signup" className="text-[#17a2b8] font-medium hover:underline">
+                Regístrate
               </Link>
             </div>
           </div>

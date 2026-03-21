@@ -66,31 +66,31 @@ const VerifyEmail = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1e3a5f] via-slate-900 to-slate-950 p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        <div className="bg-white rounded-2xl shadow-2xl shadow-[#17a2b8]/10 p-8">
           {/* Back Button */}
           <Link
             to="/login"
-            className="inline-flex items-center text-slate-600 hover:text-slate-900 mb-6 text-sm"
+            className="inline-flex items-center text-slate-600 hover:text-[#17a2b8] mb-6 text-sm"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to sign in
+            Volver al inicio de sesión
           </Link>
 
           {/* Icon */}
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-              <Shield className="w-8 h-8 text-slate-700" />
+            <div className="w-16 h-16 bg-[#17a2b8]/10 rounded-full flex items-center justify-center">
+              <Shield className="w-8 h-8 text-[#17a2b8]" />
             </div>
           </div>
 
           {/* Title */}
           <h1 className="text-2xl font-semibold text-center text-slate-900 mb-2">
-            Verify your email
+            Verifica tu email
           </h1>
           <p className="text-center text-slate-600 mb-8 text-sm">
-            We've sent a 6-digit code to <br />
+            Hemos enviado un código de 6 dígitos a <br />
             <span className="font-medium text-slate-900">{email}</span>
           </p>
 
@@ -113,23 +113,23 @@ const VerifyEmail = () => {
             </div>
 
             <p className="text-center text-xs text-slate-500 mb-6">
-              Enter the verification code sent to your email
+              Ingresa el código de verificación enviado a tu email
             </p>
 
             <Button
               type="submit"
-              className="w-full h-11 bg-slate-900 hover:bg-slate-800 text-white"
+              className="w-full h-11 bg-[#17a2b8] hover:bg-[#138a9d] text-white shadow-lg shadow-[#17a2b8]/30"
               disabled={loading}
             >
-              {loading ? 'Verifying...' : 'Verify email'}
+              {loading ? 'Verificando...' : 'Verificar email'}
             </Button>
           </form>
 
           {/* Resend */}
           <div className="text-center mt-6 text-sm text-slate-600">
-            Didn't receive the code?{' '}
-            <button className="text-slate-900 font-medium hover:underline">
-              Resend
+            ¿No recibiste el código?{' '}
+            <button className="text-[#17a2b8] font-medium hover:underline">
+              Reenviar
             </button>
           </div>
         </div>

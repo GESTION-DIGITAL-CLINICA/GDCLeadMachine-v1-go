@@ -38,14 +38,14 @@ const Leads = () => {
             <p className="text-slate-400 text-sm">{allMockLeads.length} clínicas en base de datos</p>
           </div>
           <div className="flex gap-3">
-            <Button className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-medium">
+            <Button className="bg-[#17a2b8] hover:bg-[#138a9d] text-white font-medium shadow-lg shadow-[#17a2b8]/30">
               <Sparkles className="w-4 h-4 mr-2" />
               Analizar con IA
-              <span className="ml-2 bg-slate-900 text-yellow-500 px-2 py-0.5 rounded text-xs font-bold">
+              <span className="ml-2 bg-white/20 text-white px-2 py-0.5 rounded text-xs font-bold">
                 {leadsWithScore}
               </span>
             </Button>
-            <Button variant="outline" className="border-teal-500 text-teal-400 hover:bg-teal-500/10">
+            <Button variant="outline" className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10">
               <Download className="w-4 h-4 mr-2" />
               Exportar para envío
             </Button>
@@ -53,7 +53,7 @@ const Leads = () => {
               <Upload className="w-4 h-4 mr-2" />
               Importar
             </Button>
-            <Button className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-medium">
+            <Button className="bg-[#17a2b8] hover:bg-[#138a9d] text-white font-medium shadow-lg shadow-[#17a2b8]/30">
               <Plus className="w-4 h-4 mr-2" />
               Nuevo Lead
             </Button>
@@ -61,7 +61,7 @@ const Leads = () => {
         </div>
 
         {/* Filters */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-[#1e3a5f]/50 border-[#17a2b8]/20 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex gap-4 items-center">
               {/* Search */}
@@ -108,12 +108,12 @@ const Leads = () => {
         </Card>
 
         {/* Leads Table */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-[#1e3a5f]/50 border-[#17a2b8]/20 backdrop-blur-sm">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-800">
+                  <tr className="border-b border-[#17a2b8]/20">
                     <th className="text-left py-4 px-6 text-xs font-medium text-slate-400 uppercase">CLÍNICA</th>
                     <th className="text-left py-4 px-6 text-xs font-medium text-slate-400 uppercase">CIUDAD</th>
                     <th className="text-left py-4 px-6 text-xs font-medium text-slate-400 uppercase">EMAIL</th>
@@ -124,7 +124,7 @@ const Leads = () => {
                 </thead>
                 <tbody>
                   {filteredLeads.map((lead) => (
-                    <tr key={lead.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
+                    <tr key={lead.id} className="border-b border-[#17a2b8]/10 hover:bg-[#17a2b8]/10 transition-colors">
                       <td className="py-4 px-6">
                         <div>
                           <div className="text-white text-sm font-medium">{lead.clinica}</div>
@@ -136,19 +136,19 @@ const Leads = () => {
                       <td className="py-4 px-6">
                         <span className={`text-sm ${
                           lead.score 
-                            ? lead.score >= 8 ? 'text-green-400' : 'text-yellow-400'
+                            ? lead.score >= 8 ? 'text-emerald-400' : 'text-[#17a2b8]'
                             : 'text-slate-500'
                         }`}>
                           {lead.score ? `${lead.score}/10` : 'sin score'}
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-800/50 text-slate-400 border border-[#17a2b8]/30">
                           Sin contactar
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        <button className="text-slate-400 hover:text-white transition-colors">
+                        <button className="text-slate-400 hover:text-[#17a2b8] transition-colors">
                           <ExternalLink className="w-4 h-4" />
                         </button>
                       </td>
@@ -159,7 +159,7 @@ const Leads = () => {
             </div>
             
             {/* Pagination Info */}
-            <div className="p-4 border-t border-slate-800 text-center">
+            <div className="p-4 border-t border-[#17a2b8]/20 text-center">
               <p className="text-sm text-slate-400">
                 {filteredLeads.length} de {allMockLeads.length} leads
               </p>
