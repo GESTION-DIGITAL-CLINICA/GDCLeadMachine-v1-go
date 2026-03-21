@@ -16,6 +16,7 @@ from services.ai_scoring_service import ai_scoring_service
 from services.email_service import email_service
 from services.email_queue_service import EmailQueueService
 from services.automation_service import automation_service
+from services.discovery_scheduler import DiscoveryScheduler
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -35,6 +36,7 @@ db = client[os.environ['DB_NAME']]
 # Initialize services
 email_queue_service_instance = EmailQueueService(db)
 automation_service.initialize(db, email_queue_service_instance)
+discovery_scheduler_instance = DiscoveryScheduler(automation_service, db)
 
 # Create the main app
 app = FastAPI(title="GDC Lead Management System")
@@ -95,12 +97,15 @@ async def bulk_import_clinics(bulk_data: ClinicBulkImport):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/clinics")
-async def get_clinics(skip: int = 0, limit: int = 100):
-    """Get clinics from Notion"""
+async def get_clinics(skip: int = 0, limit: int = 100, comunidad: Optional[str] = None):
+    """Get clinics from database, optionally filtered by Comunidad Autónoma"""
     try:
-        # Get from MongoDB (faster) or Notion
-        clinics = await db.clinics.find().skip(skip).limit(limit).to_list(limit)
-        total = await db.clinics.count_documents({})
+        filter_dict = {}
+        if comunidad:
+            filter_dict["comunidad_autonoma"] = comunidad
+        
+        clinics = await db.clinics.find(filter_dict).skip(skip).limit(limit).to_list(limit)
+        total = await db.clinics.count_documents(filter_dict)
         
         return {
             "clinics": clinics,
@@ -229,6 +234,12 @@ async def get_dashboard_stats():
         high_score = await db.clinics.count_documents({"score": {"$gte": 7}})
         pending_followups = await db.clinics.count_documents({"estado": "Seguimiento pendiente"})
         
+        # Group by Comunidad Autónoma
+        by_region = await db.clinics.aggregate([
+            {"$group": {"_id": "$comunidad_autonoma", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}
+        ]).to_list(20)
+        
         return {
             "total_leads": total_leads,
             "emails_sent": emails_sent,
@@ -236,11 +247,31 @@ async def get_dashboard_stats():
             "clients": clients,
             "high_score": high_score,
             "pending_followups": pending_followups,
-            "response_rate": round((responded / emails_sent * 100) if emails_sent > 0 else 0, 2)
+            "response_rate": round((responded / emails_sent * 100) if emails_sent > 0 else 0, 2),
+            "by_region": by_region
         }
     except Exception as e:
         logger.error(f"Error getting dashboard stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/discovery/trigger")
+async def trigger_discovery():
+    """Manually trigger lead discovery"""
+    try:
+        # Run discovery in background
+        asyncio.create_task(discovery_scheduler_instance.run_discovery_cycle())
+        return {"message": "Lead discovery triggered", "status": "running"}
+    except Exception as e:
+        logger.error(f"Error triggering discovery: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/discovery/status")
+async def get_discovery_status():
+    """Get lead discovery status"""
+    return {
+        "is_running": discovery_scheduler_instance.is_running,
+        "scheduler_running": discovery_scheduler_instance.scheduler.running
+    }
 
 # Include router
 app.include_router(api_router)
@@ -257,14 +288,20 @@ app.add_middleware(
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
-    """Start email queue processor on startup"""
+    """Start email queue processor and lead discovery on startup"""
     logger.info("Starting GDC Lead Management System...")
     email_queue_service_instance.start()
     logger.info("Email queue processor started - sending 1 email per 120 seconds per account")
+    
+    # Start lead discovery scheduler
+    discovery_scheduler_instance.start()
+    logger.info("Lead discovery scheduler started - running every 2 hours")
+    logger.info("System ready: Automated lead discovery → AI scoring → Email sending")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop email queue processor on shutdown"""
+    """Stop email queue processor and discovery scheduler on shutdown"""
     email_queue_service_instance.stop()
+    discovery_scheduler_instance.stop()
     client.close()
     logger.info("Shutdown complete")
