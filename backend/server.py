@@ -10,6 +10,7 @@ import logging
 import uuid
 import asyncio
 from datetime import datetime
+from bson import ObjectId
 
 # Import services
 from services.notion_service import notion_service
@@ -28,6 +29,18 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Helper function to convert ObjectIds to strings
+def convert_objectids(obj):
+    """Recursively convert ObjectId fields to strings for JSON serialization"""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {key: convert_objectids(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_objectids(item) for item in obj]
+    else:
+        return obj
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -123,6 +136,9 @@ async def get_clinics(skip: int = 0, limit: int = 100, comunidad: Optional[str] 
         clinics = await db.clinics.find(filter_dict, projection).skip(skip).limit(limit).to_list(limit)
         total = await db.clinics.count_documents(filter_dict)
         
+        # Convert ObjectIds to strings
+        clinics = convert_objectids(clinics)
+        
         return {
             "clinics": clinics,
             "total": total,
@@ -215,6 +231,10 @@ async def get_email_queue(status: Optional[str] = None):
         }
         
         queue_items = await db.email_queue.find(filter_dict, projection).limit(100).to_list(100)
+        
+        # Convert ObjectIds to strings
+        queue_items = convert_objectids(queue_items)
+        
         return {"queue": queue_items}
     except Exception as e:
         logger.error(f"Error getting queue: {str(e)}")
