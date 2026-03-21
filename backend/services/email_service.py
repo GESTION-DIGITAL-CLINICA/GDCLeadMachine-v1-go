@@ -7,20 +7,26 @@ from email import encoders
 from typing import Dict, List, Optional
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables
+ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR / '.env')
 
 logger = logging.getLogger(__name__)
 
 class EmailService:
     def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST", "smtp.serviciodecorreo.es")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "465"))
+        self.smtp_host = os.environ['SMTP_HOST']
+        self.smtp_port = int(os.environ['SMTP_PORT'])
         self.business_info = {
-            "name": os.getenv("BUSINESS_NAME", "Gestión Digital Clínica"),
-            "owner": os.getenv("BUSINESS_OWNER", "José Cabrejas"),
-            "email": os.getenv("BUSINESS_EMAIL", "contacto@gestiondigitalclinica.es"),
-            "website": os.getenv("BUSINESS_WEBSITE", "www.gestiondigitalclinica.es"),
-            "phone": os.getenv("BUSINESS_PHONE", "637 971 233"),
-            "logo_url": os.getenv("BUSINESS_LOGO_URL", "https://customer-assets.emergentagent.com/job_ecstatic-knuth-2/artifacts/u25di08h_GDC%20LOGO.jpg")
+            "name": os.environ['BUSINESS_NAME'],
+            "owner": os.environ['BUSINESS_OWNER'],
+            "email": os.environ['BUSINESS_EMAIL'],
+            "website": os.environ['BUSINESS_WEBSITE'],
+            "phone": os.environ['BUSINESS_PHONE'],
+            "logo_url": os.environ['BUSINESS_LOGO_URL']
         }
     
     def _generate_email_body(self, clinic_name: str, personalization: Dict) -> str:

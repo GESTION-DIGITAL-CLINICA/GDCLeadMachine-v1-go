@@ -99,11 +99,19 @@ class EmailQueueService:
                 logger.debug("No email accounts available (respecting rate limits)")
                 return
             
-            # Get next pending email from queue
+            # Get next pending email from queue with projection
+            projection = {
+                "_id": 1,
+                "clinic_id": 1,
+                "clinic_data": 1,
+                "attempts": 1,
+                "status": 1
+            }
+            
             pending_email = await self.db.email_queue.find_one({
                 "status": "pending",
                 "attempts": {"$lt": 3}
-            })
+            }, projection)
             
             if not pending_email:
                 logger.debug("No pending emails in queue")

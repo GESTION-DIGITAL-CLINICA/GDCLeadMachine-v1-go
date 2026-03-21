@@ -5,12 +5,18 @@ from email_validator import validate_email, EmailNotValidError
 from typing import Dict, Optional
 import logging
 import re
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables
+ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR / '.env')
 
 logger = logging.getLogger(__name__)
 
 class AIScoringService:
     def __init__(self):
-        self.llm_key = os.getenv("EMERGENT_LLM_KEY", "sk-emergent-dB2F22895DfE37a3e5")
+        self.llm_key = os.environ['EMERGENT_LLM_KEY']
         self.excluded_corporations = [
             "quironsalud", "sanitas", "vithas", "hm hospitales", 
             "hospital universitario", "hospital general"

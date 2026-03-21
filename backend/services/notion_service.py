@@ -2,14 +2,20 @@ import os
 from notion_client import AsyncClient
 from typing import List, Dict, Optional
 import logging
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables
+ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR / '.env')
 
 logger = logging.getLogger(__name__)
 
 class NotionService:
     def __init__(self):
-        api_key = os.getenv("NOTION_API_KEY", "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")
+        api_key = os.environ['NOTION_API_KEY']
         self.client = AsyncClient(auth=api_key)
-        self.database_id = os.getenv("NOTION_DATABASE_ID", "DIRECTORY_1_MAD_SEG")
+        self.database_id = os.environ['NOTION_DATABASE_ID']
     
     async def add_clinic(self, clinic_data: Dict) -> str:
         """Add a clinic to Notion database"""

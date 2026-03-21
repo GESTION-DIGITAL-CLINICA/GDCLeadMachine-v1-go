@@ -8,6 +8,7 @@ from typing import List, Optional
 import os
 import logging
 import uuid
+import asyncio
 from datetime import datetime
 
 # Import services
@@ -104,7 +105,22 @@ async def get_clinics(skip: int = 0, limit: int = 100, comunidad: Optional[str] 
         if comunidad:
             filter_dict["comunidad_autonoma"] = comunidad
         
-        clinics = await db.clinics.find(filter_dict).skip(skip).limit(limit).to_list(limit)
+        # Optimized query with projection to fetch only needed fields
+        projection = {
+            "_id": 1, 
+            "clinica": 1, 
+            "ciudad": 1, 
+            "email": 1, 
+            "telefono": 1, 
+            "website": 1, 
+            "score": 1, 
+            "estado": 1, 
+            "comunidad_autonoma": 1,
+            "scoring_details": 1,
+            "fuente": 1
+        }
+        
+        clinics = await db.clinics.find(filter_dict, projection).skip(skip).limit(limit).to_list(limit)
         total = await db.clinics.count_documents(filter_dict)
         
         return {
@@ -187,7 +203,18 @@ async def get_email_queue(status: Optional[str] = None):
         if status:
             filter_dict["status"] = status
         
-        queue_items = await db.email_queue.find(filter_dict).limit(100).to_list(100)
+        # Optimized query with projection to fetch only needed fields
+        projection = {
+            "_id": 1,
+            "clinic_id": 1,
+            "status": 1,
+            "added_at": 1,
+            "sent_at": 1,
+            "attempts": 1,
+            "clinic_data": 1
+        }
+        
+        queue_items = await db.email_queue.find(filter_dict, projection).limit(100).to_list(100)
         return {"queue": queue_items}
     except Exception as e:
         logger.error(f"Error getting queue: {str(e)}")
@@ -290,6 +317,18 @@ app.add_middleware(
 async def startup_event():
     """Start email queue processor and lead discovery on startup"""
     logger.info("Starting GDC Lead Management System...")
+    
+    # Create database indexes for query optimization
+    try:
+        logger.info("Creating database indexes...")
+        await db.email_queue.create_index([("status", 1), ("attempts", 1)])
+        await db.clinics.create_index([("comunidad_autonoma", 1)])
+        await db.clinics.create_index([("score", 1)])
+        await db.clinics.create_index([("estado", 1)])
+        logger.info("Database indexes created successfully")
+    except Exception as e:
+        logger.warning(f"Index creation warning (may already exist): {str(e)}")
+    
     email_queue_service_instance.start()
     logger.info("Email queue processor started - sending 1 email per 120 seconds per account")
     
