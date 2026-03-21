@@ -1,24 +1,32 @@
 import logging
 from typing import Dict
-from services.ai_scoring_service import ai_scoring_service
-from services.notion_service import notion_service
-from services.email_queue_service import email_queue_service
 
 logger = logging.getLogger(__name__)
 
 class AutomationService:
     """
     Handles the automated pipeline:
-    New Clinic → AI Scoring → Save to Notion → Queue Email → Send
+    New Clinic → AI Scoring → Save to MongoDB → Queue Email → Send
     """
+    
+    def __init__(self):
+        self.db = None
+        self.email_queue_service = None
+    
+    def initialize(self, db, email_queue_service):
+        """Initialize with database and email queue service"""
+        self.db = db
+        self.email_queue_service = email_queue_service
     
     async def process_new_clinic(self, clinic_data: Dict, source: str = "Manual") -> Dict:
         """
         Complete automation pipeline for new clinic:
         1. Score with AI
-        2. Save to Notion
+        2. Save to MongoDB
         3. Queue email if score is good
         """
+        from services.ai_scoring_service import ai_scoring_service
+        
         try:
             logger.info(f"Processing new clinic: {clinic_data.get('clinica')}")
             
@@ -27,18 +35,20 @@ class AutomationService:
             clinic_data["score"] = scoring_result["score"]
             clinic_data["scoring_details"] = scoring_result["details"]
             clinic_data["fuente"] = source
+            clinic_data["estado"] = "Sin contactar"
             
             logger.info(f"Scored {clinic_data.get('clinica')}: {scoring_result['score']}/10")
             
-            # Step 2: Save to Notion (if score is good enough)
+            # Step 2: Save to MongoDB
             if scoring_result["should_contact"]:
-                notion_page_id = await notion_service.add_clinic(clinic_data)
-                clinic_data["notion_id"] = notion_page_id
+                result = await self.db.clinics.insert_one(clinic_data)
+                clinic_id = str(result.inserted_id)
+                clinic_data["_id"] = clinic_id
                 
                 # Step 3: Queue email
-                await email_queue_service.add_to_queue(notion_page_id, clinic_data)
-                
-                logger.info(f"Clinic added to queue: {clinic_data.get('clinica')}")
+                if self.email_queue_service:
+                    await self.email_queue_service.add_to_queue(clinic_id, clinic_data)
+                    logger.info(f"Clinic added to queue: {clinic_data.get('clinica')}")
                 
                 return {
                     "success": True,

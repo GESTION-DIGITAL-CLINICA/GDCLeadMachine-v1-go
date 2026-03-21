@@ -34,6 +34,7 @@ db = client[os.environ['DB_NAME']]
 
 # Initialize services
 email_queue_service_instance = EmailQueueService(db)
+automation_service.initialize(db, email_queue_service_instance)
 
 # Create the main app
 app = FastAPI(title="GDC Lead Management System")

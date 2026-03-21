@@ -133,13 +133,15 @@ class EmailQueueService:
                     }
                 )
                 
-                # Update clinic in Notion
-                await notion_service.update_clinic(
-                    pending_email["clinic_id"],
+                # Update clinic in MongoDB
+                await self.db.clinics.update_one(
+                    {"_id": pending_email["clinic_id"]},
                     {
-                        "estado": "Email enviado",
-                        "email_sent": True,
-                        "last_email_date": datetime.utcnow().isoformat()
+                        "$set": {
+                            "estado": "Email enviado",
+                            "email_sent": True,
+                            "last_email_date": datetime.utcnow().isoformat()
+                        }
                     }
                 )
                 
