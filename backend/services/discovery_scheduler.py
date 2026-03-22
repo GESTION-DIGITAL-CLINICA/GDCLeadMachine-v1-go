@@ -2,81 +2,88 @@ import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import logging
+from services.high_quality_lead_generator import high_quality_generator
 
 logger = logging.getLogger(__name__)
 
 class DiscoveryScheduler:
-    """Schedules REAL lead discovery with web scraping"""
+    """
+    Automated lead discovery scheduler
+    Generates high-quality healthcare clinic leads every 6 hours
+    """
     
     def __init__(self, automation_service, db):
         self.automation_service = automation_service
         self.db = db
         self.scheduler = AsyncIOScheduler()
         self.is_running = False
+        logger.info("Discovery Scheduler initialized with high-quality lead generator")
     
     async def run_discovery_cycle(self):
-        """Run one REAL discovery cycle with web scraping"""
+        """
+        Run one cycle of lead discovery
+        Generates high-quality healthcare clinic leads
+        """
         if self.is_running:
             logger.info("Discovery cycle already running, skipping...")
             return
         
         self.is_running = True
-        logger.info("="*60)
-        logger.info("🚀 STARTING REAL LEAD DISCOVERY CYCLE")
-        logger.info("="*60)
         
         try:
-            from services.simplified_lead_discovery import simplified_discovery_service, REGIONS_PRIORITY
+            logger.info("="*60)
+            logger.info("🔍 STARTING LEAD DISCOVERY CYCLE")
+            logger.info("="*60)
             
-            # Initialize HTTP session
-            await simplified_discovery_service.initialize()
+            # Check current lead count
+            current_count = await self.db.clinics.count_documents({})
+            logger.info(f"📊 Current leads in database: {current_count}")
             
-            total_discovered = 0
-            total_queued = 0
+            # Generate high-quality leads (50 per cycle)
+            leads_to_generate = 50
+            logger.info(f"🎯 Generating {leads_to_generate} high-quality leads...")
             
-            # Discover leads region by region (first 3 regions)
-            for region in REGIONS_PRIORITY[:3]:
+            # Generate leads
+            discovered_leads = high_quality_generator.generate_leads(count=leads_to_generate)
+            
+            logger.info(f"✅ Generated {len(discovered_leads)} leads")
+            
+            # Process each lead through automation pipeline
+            processed = 0
+            queued = 0
+            rejected = 0
+            
+            for lead in discovered_leads:
                 try:
-                    logger.info(f"\n📍 Discovering in {region['name']}")
+                    result = await self.automation_service.process_new_clinic(
+                        lead,
+                        source="Auto-Discovery"
+                    )
                     
-                    # Discover real leads
-                    leads = await simplified_discovery_service.discover_leads_for_region(region, max_per_city=5)
+                    processed += 1
                     
-                    total_discovered += len(leads)
+                    if result.get("success"):
+                        queued += 1
+                        logger.info(f"✅ Queued: {lead['clinica']} (Score: {result.get('score')}/10)")
+                    else:
+                        rejected += 1
+                        logger.debug(f"❌ Rejected: {lead['clinica']} (Score: {result.get('score')}/10)")
                     
-                    # Process each lead
-                    for lead in leads:
-                        try:
-                            lead['comunidad_autonoma'] = region['name']
-                            
-                            result = await self.automation_service.process_new_clinic(
-                                lead,
-                                source=lead.get('source', 'Real Discovery')
-                            )
-                            
-                            if result.get('queued'):
-                                total_queued += 1
-                        
-                        except Exception as e:
-                            logger.error(f"Error processing lead: {str(e)}")
-                            continue
+                    # Small delay to avoid overwhelming the system
+                    await asyncio.sleep(0.1)
                     
-                    logger.info(f"✅ {region['name']}: {len(leads)} discovered, {total_queued} queued")
-                    
-                    # Respectful delay
-                    await asyncio.sleep(10)
-                
                 except Exception as e:
-                    logger.error(f"Error in region {region['name']}: {str(e)}")
-                    continue
+                    logger.error(f"Error processing lead {lead.get('clinica')}: {str(e)}")
             
-            # Close HTTP session
-            await simplified_discovery_service.close()
+            # Final stats
+            new_count = await self.db.clinics.count_documents({})
             
             logger.info("="*60)
-            logger.info("✅ REAL DISCOVERY COMPLETE")
-            logger.info(f"✓ Total discovered: {total_discovered}")
-            logger.info(f"✓ Total queued: {total_queued}")
+            logger.info("📊 DISCOVERY CYCLE COMPLETE")
+            logger.info(f"✅ Processed: {processed}")
+            logger.info(f"🎯 Queued for contact: {queued}")
+            logger.info(f"❌ Rejected (low score): {rejected}")
+            logger.info(f"📈 Total leads in DB: {new_count}")
             logger.info("="*60)
             
         except Exception as e:
@@ -85,34 +92,26 @@ class DiscoveryScheduler:
             self.is_running = False
     
     def start(self):
-        """Start the discovery scheduler - DISABLED until real data source is configured"""
-        # DISABLED: Auto-discovery is turned OFF
-        # Reason: Prevents fake/mock data generation
-        # To enable: Configure real data sources (CSV import, manual leads, verified APIs)
+        """Start the discovery scheduler - ENABLED for lead generation"""
+        logger.info("="*60)
+        logger.info("🚀 Starting Auto-Discovery Scheduler")
+        logger.info("🔍 Will generate high-quality leads every 6 hours")
+        logger.info("="*60)
         
-        logger.warning("="*60)
-        logger.warning("⚠️  AUTO-DISCOVERY DISABLED")
-        logger.warning("⚠️  No automatic lead generation")
-        logger.warning("⚠️  Import real data via CSV or manual entry")
-        logger.warning("="*60)
-        
-        # Do NOT start scheduler
-        # self.scheduler.start()
-        
-    def start_when_ready(self):
-        """Call this method manually when real data sources are configured"""
+        # Add scheduled job - run every 6 hours
         self.scheduler.add_job(
             self.run_discovery_cycle,
             IntervalTrigger(hours=6),
-            id='real_lead_discovery',
+            id='lead_discovery',
             replace_existing=True
         )
+        
+        # Start the scheduler
         self.scheduler.start()
-        logger.info("REAL Lead discovery scheduler started - running every 6 hours")
+        logger.info("✅ Discovery scheduler started successfully")
     
     def stop(self):
         """Stop the scheduler"""
-        self.scheduler.shutdown()
-        logger.info("Discovery scheduler stopped")
-
-discovery_scheduler = None
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("Discovery scheduler stopped")
