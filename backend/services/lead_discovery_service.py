@@ -187,10 +187,25 @@ class LeadDiscoveryService:
         return leads
     
     def _generate_email(self, clinic_name: str, location: str) -> str:
-        """Generate plausible email address"""
-        # Remove special characters and spaces
-        clean_name = re.sub(r'[^a-zA-Z0-9]', '', clinic_name.lower())
-        clean_location = re.sub(r'[^a-zA-Z0-9]', '', location.lower())
+        """Generate plausible email address with proper character transliteration"""
+        # Transliterate Spanish characters properly
+        transliteration_map = {
+            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+            'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+            'ñ': 'n', 'Ñ': 'N', 'ü': 'u', 'Ü': 'U'
+        }
+        
+        # Apply transliteration
+        transliterated_name = clinic_name.lower()
+        transliterated_location = location.lower()
+        
+        for spanish_char, latin_char in transliteration_map.items():
+            transliterated_name = transliterated_name.replace(spanish_char, latin_char)
+            transliterated_location = transliterated_location.replace(spanish_char, latin_char)
+        
+        # Remove special characters and spaces (but keep properly transliterated letters)
+        clean_name = re.sub(r'[^a-z0-9]', '', transliterated_name)
+        clean_location = re.sub(r'[^a-z0-9]', '', transliterated_location)
         
         patterns = [
             f"info@{clean_name}.com",
