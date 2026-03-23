@@ -16,11 +16,36 @@ logger = logging.getLogger(__name__)
 
 class AIScoringService:
     def __init__(self):
-        self.llm_key = os.environ['EMERGENT_LLM_KEY']
+        self.llm_key = os.environ.get('EMERGENT_LLM_KEY', '')
+        # Expanded list of corporations/hospitals to exclude
         self.excluded_corporations = [
-            "quironsalud", "sanitas", "vithas", "hm hospitales", 
-            "hospital universitario", "hospital general"
+            # Hospitals
+            "hospital", "hospitales", "h.", "hm ", "hm-", "universitario", "universitaria",
+            # Large chains
+            "quironsalud", "quiron", "sanitas", "vithas", "viamed", "hospiten",
+            "hm madrid", "hm norte", "hm sanchinarro", "grupo hm",
+            # Corporate/institutional
+            "ruber", "ntra.sra", "nuestra señora", "beata maria", "beata maría",
+            "san rafael", "la luz", "la zarzuela", "la moraleja", "virgen del mar",
+            # Sanitas specific dental chains
+            "dental sanitas", "dental milenium", "milenium", "centro dental milenium",
+            # Medical chains  
+            "ibermedic", "fisiogestion", "corporacion", "corporation", "grupo",
+            # Other large entities
+            "olympia", "mapfre", "asisa", "adeslas", "dkv", "cigna",
+            # Government/Public
+            "publico", "público", "estatal", "regional", "municipal", "nacional"
         ]
+    
+    def _is_large_corporation(self, clinic_name: str) -> bool:
+        """Check if the clinic is a large corporation that should be excluded"""
+        name_lower = clinic_name.lower().strip()
+        
+        for corp in self.excluded_corporations:
+            if corp in name_lower:
+                return True
+        
+        return False
     
     async def score_clinic(self, clinic_data: Dict) -> Dict:
         """
@@ -28,7 +53,7 @@ class AIScoringService:
         - Email authenticity
         - Website quality
         - Domain type (prefers non-corporate, gmail/hotmail gets bonus)
-        - Excludes big corporations
+        - Excludes big corporations and hospitals
         """
         try:
             score = 0
@@ -36,12 +61,13 @@ class AIScoringService:
             
             # 1. Check if it's a big corporation (auto-reject)
             clinic_name = clinic_data.get("clinica", "").lower()
-            if any(corp in clinic_name for corp in self.excluded_corporations):
+            if self._is_large_corporation(clinic_name):
                 return {
                     "score": 0,
                     "authentic": False,
-                    "details": ["Corporación grande excluida"],
-                    "should_contact": False
+                    "details": ["Corporación/Hospital grande excluido automáticamente"],
+                    "should_contact": False,
+                    "is_excluded_corporation": True
                 }
             
             # 2. Validate email

@@ -4,7 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import os
 import logging
 import uuid
@@ -383,6 +383,96 @@ async def get_discovery_status():
         "scheduler_running": discovery_scheduler_instance.scheduler.running
     }
 
+# PDF Lead Import endpoint
+@api_router.post("/leads/import-pdf")
+async def import_pdf_leads(pdf_data: List[dict]):
+    """
+    Import leads from PDF extraction data.
+    Expects a list of clinic objects with: clinic_name, city, address, phone_numbers, email
+    """
+    try:
+        from services.pdf_lead_processor import get_pdf_processor
+        processor = get_pdf_processor(db)
+        
+        stats = await processor.process_pdf_data(pdf_data)
+        
+        return {
+            "success": True,
+            "message": f"PDF import completed",
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Error importing PDF leads: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/automation/status")
+async def get_automation_status():
+    """Get full 24/7 automation status"""
+    try:
+        # Get queue counts
+        email_pending = await db.email_queue.count_documents({"status": "pending"})
+        email_sent = await db.email_queue.count_documents({"status": "sent"})
+        email_failed = await db.email_queue.count_documents({"status": "failed"})
+        
+        whatsapp_pending = await db.whatsapp_queue.count_documents({"status": "pending"})
+        whatsapp_sent = await db.whatsapp_queue.count_documents({"status": "sent"})
+        
+        # Get lead counts
+        total_leads = await db.clinics.count_documents({})
+        pending_leads = await db.clinics.count_documents({"estado": "Sin contactar"})
+        in_queue = await db.clinics.count_documents({"estado": "En cola de contacto"})
+        
+        # Get scheduler jobs
+        jobs = []
+        for job in discovery_scheduler_instance.scheduler.get_jobs():
+            jobs.append({
+                "id": job.id,
+                "next_run": str(job.next_run_time) if job.next_run_time else None
+            })
+        
+        return {
+            "automation_active": True,
+            "discovery": {
+                "is_running": discovery_scheduler_instance.is_running,
+                "scheduler_active": discovery_scheduler_instance.scheduler.running,
+                "scheduled_jobs": jobs,
+                "mode": "24/7 Automated - Every hour for 20 minutes"
+            },
+            "email_queue": {
+                "pending": email_pending,
+                "sent": email_sent,
+                "failed": email_failed,
+                "interval": f"{email_queue_service_instance.interval_seconds} seconds",
+                "accounts_active": len(email_queue_service_instance.email_accounts)
+            },
+            "whatsapp_queue": {
+                "pending": whatsapp_pending,
+                "sent": whatsapp_sent
+            },
+            "leads": {
+                "total": total_leads,
+                "pending_contact": pending_leads,
+                "in_queue": in_queue
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting automation status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/notion/status")
+async def get_notion_status():
+    """Check Notion integration status"""
+    try:
+        status = await notion_service.test_connection()
+        return status
+    except Exception as e:
+        logger.error(f"Error checking Notion status: {str(e)}")
+        return {
+            "configured": False,
+            "connection_working": False,
+            "message": f"Error: {str(e)}"
+        }
+
 
 # Contact History endpoints
 @api_router.get("/contacts/history/{clinic_id}")
@@ -502,10 +592,15 @@ async def startup_event():
     whatsapp_queue_service_instance.start()
     logger.info("WhatsApp queue processor started - sending 1 message per 60 seconds")
     
-    # Start lead discovery scheduler
+    # Start lead discovery scheduler - 24/7 MODE
     discovery_scheduler_instance.start()
-    logger.info("Lead discovery scheduler started - running every 2 hours")
-    logger.info("System ready: Automated lead discovery → AI scoring → Email + WhatsApp sending with contact history tracking")
+    logger.info("="*60)
+    logger.info("🚀 24/7 AUTOMATION ACTIVE")
+    logger.info("📧 Email sending: Every 120 seconds")
+    logger.info("📱 WhatsApp sending: Every 60 seconds") 
+    logger.info("🔍 Lead processing: Every hour for 20 minutes")
+    logger.info("🌙 System works while you sleep!")
+    logger.info("="*60)
 
 @app.on_event("shutdown")
 async def shutdown_event():

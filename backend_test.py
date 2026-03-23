@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Get backend URL from frontend .env
-BACKEND_URL = "https://deployment-core-1.preview.emergentagent.com/api"
+BACKEND_URL = "https://lead-harvest-24-7.preview.emergentagent.com/api"
 
 def test_health_check():
     """Test GET /api/ - Health check endpoint"""

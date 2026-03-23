@@ -126,7 +126,7 @@ const Prospeccion = () => {
               
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm font-medium text-blue-900 mb-1">Frecuencia</p>
-                <p className="text-slate-700">Ejecuta automáticamente cada 6 horas</p>
+                <p className="text-slate-700">Ejecuta automáticamente cada hora (20 minutos por ciclo)</p>
               </div>
             </div>
           </CardContent>
