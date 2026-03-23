@@ -495,6 +495,17 @@ async def get_notion_status():
     """Check Notion integration status"""
     try:
         status = await notion_service.test_connection()
+        
+        # Also try to get database info
+        if status.get("connection_working"):
+            schema = await notion_service.get_database_schema()
+            if schema:
+                status["database_title"] = schema.get("title", [{}])[0].get("plain_text", "Unknown")
+                status["properties"] = list(schema.get("properties", {}).keys())
+                # Check if it's a synced database
+                if schema.get("is_inline"):
+                    status["warning"] = "This is an inline database which may have restrictions"
+        
         return status
     except Exception as e:
         logger.error(f"Error checking Notion status: {str(e)}")
@@ -503,6 +514,63 @@ async def get_notion_status():
             "connection_working": False,
             "message": f"Error: {str(e)}"
         }
+
+@api_router.post("/notion/sync-all")
+async def sync_all_leads_to_notion(limit: int = 50):
+    """Sync existing leads to Notion (batch operation)"""
+    try:
+        if not notion_service.is_configured:
+            raise HTTPException(status_code=400, detail="Notion not configured")
+        
+        # Get leads not yet synced to Notion
+        leads = await db.clinics.find({
+            "notion_page_id": {"$exists": False},
+            "score": {"$gte": 5}
+        }).limit(limit).to_list(limit)
+        
+        synced = 0
+        failed = 0
+        
+        for lead in leads:
+            try:
+                lead_data = {
+                    "clinica": lead.get("clinica", ""),
+                    "ciudad": lead.get("ciudad", ""),
+                    "email": lead.get("email", ""),
+                    "telefono": lead.get("telefono", ""),
+                    "score": lead.get("score"),
+                    "estado": lead.get("estado", "Sin contactar"),
+                    "website": lead.get("website", ""),
+                    "fuente": lead.get("fuente", "Import")
+                }
+                
+                page_id = await notion_service.add_clinic(lead_data)
+                
+                if page_id:
+                    await db.clinics.update_one(
+                        {"_id": lead["_id"]},
+                        {"$set": {"notion_page_id": page_id}}
+                    )
+                    synced += 1
+                else:
+                    failed += 1
+                    
+            except Exception as e:
+                logger.error(f"Error syncing lead to Notion: {str(e)}")
+                failed += 1
+        
+        return {
+            "success": True,
+            "synced": synced,
+            "failed": failed,
+            "message": f"Synced {synced} leads to Notion"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in batch Notion sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Contact History endpoints

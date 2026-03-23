@@ -40,6 +40,18 @@ class NotionService:
         clean_id = self.database_id.replace('-', '')
         return len(clean_id) == 32 and clean_id.isalnum()
     
+    async def get_database_schema(self) -> Optional[Dict]:
+        """Get the database schema to understand what properties are available"""
+        if not self.is_configured or not self.client:
+            return None
+            
+        try:
+            response = await self.client.databases.retrieve(self.database_id)
+            return response
+        except Exception as e:
+            logger.error(f"Error getting database schema: {str(e)}")
+            return None
+    
     async def add_clinic(self, clinic_data: Dict) -> Optional[str]:
         """Add a clinic to Notion database"""
         if not self.is_configured or not self.client:
@@ -47,16 +59,55 @@ class NotionService:
             return None
             
         try:
-            properties = {
-                "Nombre": {"title": [{"text": {"content": clinic_data.get("clinica", "")}}]},
-                "Ciudad": {"rich_text": [{"text": {"content": clinic_data.get("ciudad", "")}}]},
-                "Email": {"email": clinic_data.get("email", "") or None},
-                "Teléfono": {"phone_number": clinic_data.get("telefono", "") or None},
-                "Score": {"number": clinic_data.get("score")},
-                "Estado": {"select": {"name": clinic_data.get("estado", "Sin contactar")}},
-                "Website": {"url": clinic_data.get("website", "") or None},
-                "Fuente": {"rich_text": [{"text": {"content": clinic_data.get("fuente", "Manual")}}]},
-            }
+            # First get the database schema to understand what properties exist
+            schema = await self.get_database_schema()
+            available_props = set(schema.get("properties", {}).keys()) if schema else set()
+            
+            # Build properties based on what exists in the database
+            properties = {}
+            
+            # Title property (required - find the title property name)
+            title_prop = None
+            for prop_name, prop_config in (schema.get("properties", {}) if schema else {}).items():
+                if prop_config.get("type") == "title":
+                    title_prop = prop_name
+                    break
+            
+            if title_prop:
+                properties[title_prop] = {"title": [{"text": {"content": clinic_data.get("clinica", "")[:2000]}}]}
+            else:
+                # Fallback - try common title names
+                properties["Nombre"] = {"title": [{"text": {"content": clinic_data.get("clinica", "")[:2000]}}]}
+            
+            # Add other properties only if they exist in the database
+            if "Ciudad" in available_props:
+                properties["Ciudad"] = {"rich_text": [{"text": {"content": clinic_data.get("ciudad", "")[:2000]}}]}
+            
+            if "Email" in available_props:
+                email = clinic_data.get("email", "")
+                if email:
+                    properties["Email"] = {"email": email}
+            
+            if "Teléfono" in available_props:
+                phone = clinic_data.get("telefono", "")
+                if phone:
+                    properties["Teléfono"] = {"phone_number": phone}
+            
+            if "Score" in available_props:
+                score = clinic_data.get("score")
+                if score is not None:
+                    properties["Score"] = {"number": score}
+            
+            if "Estado" in available_props:
+                properties["Estado"] = {"select": {"name": clinic_data.get("estado", "Sin contactar")}}
+            
+            if "Website" in available_props:
+                website = clinic_data.get("website", "")
+                if website:
+                    properties["Website"] = {"url": website}
+            
+            if "Fuente" in available_props:
+                properties["Fuente"] = {"rich_text": [{"text": {"content": clinic_data.get("fuente", "Manual")[:2000]}}]}
             
             response = await self.client.pages.create(
                 parent={"database_id": self.database_id},

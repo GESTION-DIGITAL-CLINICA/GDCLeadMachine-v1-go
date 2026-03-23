@@ -69,9 +69,19 @@ class DiscoveryScheduler:
                             lead["score"] = scoring.get("score", 5)
                             lead["scoring_details"] = scoring.get("details", [])
                             
-                            await self.db.clinics.insert_one(lead)
+                            result = await self.db.clinics.insert_one(lead)
+                            lead["_id"] = str(result.inserted_id)
                             imported += 1
                             logger.info(f"✅ Imported: {lead['clinica']} (Score: {lead['score']})")
+                            
+                            # Sync to Notion
+                            try:
+                                from services.notion_service import notion_service
+                                if notion_service.is_configured:
+                                    await notion_service.add_clinic(lead)
+                                    logger.info(f"📋 Synced to Notion: {lead['clinica']}")
+                            except Exception as ne:
+                                logger.debug(f"Notion sync skipped: {str(ne)}")
                         else:
                             logger.debug(f"❌ Filtered: {lead['clinica']} - {scoring.get('details', [])}")
                     else:
