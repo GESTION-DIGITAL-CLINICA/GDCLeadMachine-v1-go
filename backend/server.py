@@ -88,6 +88,9 @@ automation_service.initialize(
 )
 discovery_scheduler_instance = DiscoveryScheduler(automation_service, db)
 
+from services.test_run_service import TestRunService
+test_run_service_instance = TestRunService(db)
+
 # Create the main app
 app = FastAPI(title="GDC Lead Management System")
 api_router = APIRouter(prefix="/api")
@@ -434,7 +437,15 @@ async def get_discovery_status():
     return {
         "is_running": discovery_scheduler_instance.is_running,
         "scheduler_running": discovery_scheduler_instance.scheduler.running,
-        "google_places_enabled": discovery_scheduler_instance.google_api_enabled
+        "google_places_enabled": discovery_scheduler_instance.google_api_enabled,
+        "cumulative_new_clinics_discovered": discovery_scheduler_instance.total_new_clinics_discovered,
+        "cumulative_leads_processed": discovery_scheduler_instance.total_leads_processed,
+        "last_cycle_new_clinics": discovery_scheduler_instance.last_cycle_new_clinics,
+        "last_cycle_at": (
+            discovery_scheduler_instance.last_cycle_at.isoformat()
+            if discovery_scheduler_instance.last_cycle_at
+            else None
+        ),
     }
 
 @api_router.post("/discovery/google-places")
@@ -773,6 +784,195 @@ async def apply_bounce_correction(clinic_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------------------------------------------------------------------
+# Test-Run endpoints  (/api/test-run/...)
+# ---------------------------------------------------------------------------
+
+class TestRunStartRequest(BaseModel):
+    duration_hours: float = 2.0
+    notes: Optional[str] = None
+
+
+@api_router.post("/test-run/start")
+async def start_test_run(body: TestRunStartRequest):
+    """
+    Start a timed test run.  The service records a baseline snapshot of
+    key counters (total clinics, emails sent) and then auto-finishes after
+    *duration_hours* (default 2 h).  A report is saved to MongoDB.
+
+    Only one run can be active at a time.
+    """
+    try:
+        result = await test_run_service_instance.start_test_run(
+            duration_hours=body.duration_hours,
+            notes=body.notes,
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"Error starting test run: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/test-run/status")
+async def get_test_run_status():
+    """
+    Return live status of the currently active test run (or the most recent
+    one).  Shows elapsed / remaining time and a live delta of new clinics
+    found and emails sent so far.
+    """
+    try:
+        return await test_run_service_instance.get_status()
+    except Exception as exc:
+        logger.error(f"Error getting test run status: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/test-run/finish")
+async def finish_test_run():
+    """
+    Manually finish the active test run early and retrieve the final report.
+    """
+    try:
+        return await test_run_service_instance.finish_test_run()
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"Error finishing test run: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/test-run/report/{run_id}")
+async def get_test_run_report(run_id: str):
+    """Retrieve the saved report for a specific run_id."""
+    try:
+        report = await test_run_service_instance.get_report(run_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+        return report
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Error fetching test run report: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/test-run/history")
+async def get_test_run_history(limit: int = 20):
+    """List past test runs, most recent first."""
+    try:
+        return await test_run_service_instance.list_runs(limit=limit)
+    except Exception as exc:
+        logger.error(f"Error listing test run history: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# /mcp  – Model Context Protocol manifest endpoint
+# ---------------------------------------------------------------------------
+
+@app.get("/mcp")
+async def mcp_manifest():
+    """
+    MCP (Model Context Protocol) manifest endpoint.
+
+    Returns a JSON description of the tools this service exposes so that
+    an MCP-compatible client (e.g. Emergent platform) can auto-discover
+    capabilities and wire them into an AI agent.
+    """
+    base_url = "/api"
+    return {
+        "schema_version": "v1",
+        "name": "GDC LeadMachine",
+        "description": (
+            "24/7 automated lead discovery, AI scoring, and email outreach "
+            "for Spanish health clinics (dental, physio, ophthalmology, "
+            "dermatology, psychology, medical centres, veterinary)."
+        ),
+        "tools": [
+            {
+                "name": "get_dashboard_stats",
+                "description": "Get overall system stats: total leads, emails sent, response rate.",
+                "method": "GET",
+                "path": f"{base_url}/stats/dashboard",
+            },
+            {
+                "name": "trigger_discovery",
+                "description": "Manually trigger a lead discovery cycle using Google Places API.",
+                "method": "POST",
+                "path": f"{base_url}/discovery/trigger",
+            },
+            {
+                "name": "get_automation_status",
+                "description": "Get full 24/7 automation pipeline status (discovery, email queue, leads).",
+                "method": "GET",
+                "path": f"{base_url}/automation/status",
+            },
+            {
+                "name": "start_test_run",
+                "description": (
+                    "Start a timed test run (default 2 hours). "
+                    "Records baseline stats and auto-generates a report "
+                    "showing new clinics found and emails sent."
+                ),
+                "method": "POST",
+                "path": f"{base_url}/test-run/start",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "duration_hours": {
+                            "type": "number",
+                            "default": 2.0,
+                            "description": "How long the test run should last in hours.",
+                        },
+                        "notes": {
+                            "type": "string",
+                            "description": "Optional free-text notes for this run.",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "get_test_run_status",
+                "description": "Check live progress of the current test run.",
+                "method": "GET",
+                "path": f"{base_url}/test-run/status",
+            },
+            {
+                "name": "finish_test_run",
+                "description": "Manually finish the active test run and retrieve the final report.",
+                "method": "POST",
+                "path": f"{base_url}/test-run/finish",
+            },
+            {
+                "name": "get_test_run_report",
+                "description": "Get the saved report for a specific run_id.",
+                "method": "GET",
+                "path": f"{base_url}/test-run/report/{{run_id}}",
+            },
+            {
+                "name": "list_test_run_history",
+                "description": "List past test runs, most recent first.",
+                "method": "GET",
+                "path": f"{base_url}/test-run/history",
+            },
+            {
+                "name": "get_email_stats",
+                "description": "Get email queue statistics (total sent, pending, failed).",
+                "method": "GET",
+                "path": f"{base_url}/email/stats",
+            },
+            {
+                "name": "list_clinics",
+                "description": "Get paginated list of clinics with optional region filter.",
+                "method": "GET",
+                "path": f"{base_url}/clinics",
+            },
+        ],
+    }
+
+
 # Include router
 app.include_router(api_router)
 
@@ -790,6 +990,24 @@ app.add_middleware(
 async def startup_event():
     """Start email queue processor and lead discovery on startup"""
     logger.info("Starting GDC Lead Management System...")
+
+    # Validate key environment variables at startup so misconfiguration
+    # is surfaced immediately rather than silently failing at runtime.
+    # Note: MONGO_URL and DB_NAME are already accessed with hard brackets
+    # above (raising KeyError on startup if missing); the check here adds
+    # a friendly warning for the remaining recommended variables.
+    recommended_env_vars = [
+        "BUSINESS_NAME",
+        "BUSINESS_EMAIL",
+        "EMAIL_1_USERNAME",
+        "EMERGENT_LLM_KEY",
+    ]
+    missing = [v for v in recommended_env_vars if not os.environ.get(v)]
+    if missing:
+        logger.warning(
+            f"⚠️  Missing recommended environment variables: {', '.join(missing)}. "
+            "Some features may not work correctly."
+        )
     
     # Create database indexes for query optimization
     try:
@@ -806,6 +1024,9 @@ async def startup_event():
         await db.clinics.create_index([("estado", 1), ("email_verified", 1)])
         await db.clinics.create_index([("email_bounced", 1)])
         await db.email_bounces.create_index([("bounced_email", 1)], unique=True)
+        # Index for test run lookups
+        await db.test_runs.create_index([("started_at", -1)])
+        await db.test_runs.create_index([("status", 1)])
         logger.info("Database indexes created successfully")
     except Exception as e:
         logger.warning(f"Index creation warning (may already exist): {str(e)}")
@@ -829,6 +1050,8 @@ async def startup_event():
     logger.info("🔍 Lead processing: Every hour for 20 minutes")
     logger.info("📬 Inbox monitor: Every 5 minutes (bounce detection)")
     logger.info("🌙 System works while you sleep!")
+    logger.info("⏱️  Test runs available at POST /api/test-run/start")
+    logger.info("🔌 MCP manifest available at GET /mcp")
     logger.info("="*60)
 
 @app.on_event("shutdown")
