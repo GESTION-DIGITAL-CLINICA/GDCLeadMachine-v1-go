@@ -21,7 +21,13 @@ class DiscoveryScheduler:
         self.scheduler = AsyncIOScheduler()
         self.is_running = False
         self.discovery_duration_minutes = 20  # Run for 20 minutes each cycle
-        self.google_api_enabled = bool(os.environ.get('GOOGLE_API_KEY'))
+        self.google_api_key = (
+            os.environ.get('GOOGLE_API_KEY')
+            or os.environ.get('GOOGLE_PLACES_API_KEY')
+            or os.environ.get('GOOGLE_MAPS_API_KEY')
+            or ''
+        )
+        self.google_api_enabled = bool(self.google_api_key)
         logger.info("Discovery Scheduler initialized - 24/7 automated mode")
         if self.google_api_enabled:
             logger.info("🗺️ Google Places API ENABLED - Real lead discovery active!")
@@ -144,7 +150,8 @@ class DiscoveryScheduler:
                 # Get pending leads that haven't been processed
                 pending_leads = await self.db.clinics.find({
                     "estado": "Sin contactar",
-                    "email": {"$exists": True, "$ne": "", "$ne": None}
+                    "email": {"$exists": True, "$ne": "", "$ne": None},
+                    "email_verified": True
                 }).limit(10).to_list(10)
                 
                 if not pending_leads:
@@ -165,6 +172,7 @@ class DiscoveryScheduler:
                                 "clinic_data": {
                                     "clinica": lead.get("clinica"),
                                     "email": lead.get("email"),
+                                    "email_verified": lead.get("email_verified", False),
                                     "ciudad": lead.get("ciudad"),
                                     "telefono": lead.get("telefono", "")
                                 },

@@ -95,8 +95,7 @@ class SimplifiedLeadDiscovery:
                             if len(clinic_name) > 100:
                                 continue
                             
-                            # Generate professional email
-                            email = self._generate_professional_email(clinic_name, location)
+                            email = self._extract_email(str(card))
                             
                             if email and email not in self.discovered_emails:
                                 self.discovered_emails.add(email)
@@ -104,6 +103,7 @@ class SimplifiedLeadDiscovery:
                                     "clinica": clinic_name[:100],
                                     "ciudad": location,
                                     "email": email,
+                                    "email_verified": True,
                                     "telefono": "",
                                     "website": url,
                                     "source": "Doctoralia"
@@ -147,8 +147,7 @@ class SimplifiedLeadDiscovery:
                             # Extract phone if available
                             phone = self._extract_phone(str(listing.parent))
                             
-                            # Generate email
-                            email = self._generate_professional_email(clinic_name, location)
+                            email = self._extract_email(str(listing.parent))
                             
                             if email and email not in self.discovered_emails:
                                 self.discovered_emails.add(email)
@@ -156,6 +155,7 @@ class SimplifiedLeadDiscovery:
                                     "clinica": clinic_name[:100],
                                     "ciudad": location,
                                     "email": email,
+                                    "email_verified": True,
                                     "telefono": phone or "",
                                     "website": "",
                                     "source": "Páginas Amarillas"
@@ -198,7 +198,7 @@ class SimplifiedLeadDiscovery:
                                 clinic_name = text.split('|')[0].split('-')[0].strip()
                                 
                                 if len(clinic_name) > 10 and len(clinic_name) < 100:
-                                    email = self._generate_professional_email(clinic_name, location)
+                                    email = self._extract_email(text)
                                     
                                     if email and email not in self.discovered_emails:
                                         self.discovered_emails.add(email)
@@ -206,6 +206,7 @@ class SimplifiedLeadDiscovery:
                                             "clinica": clinic_name[:100],
                                             "ciudad": location,
                                             "email": email,
+                                            "email_verified": True,
                                             "telefono": "",
                                             "website": "",
                                             "source": "Google Search"
@@ -236,33 +237,15 @@ class SimplifiedLeadDiscovery:
                     return f"{phone[:3]} {phone[3:5]} {phone[5:7]} {phone[7:9]}"
         return None
     
-    def _generate_professional_email(self, clinic_name: str, location: str) -> str:
-        """Generate professional email with proper transliteration"""
-        transliteration_map = {
-            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-            'ñ': 'n', 'ü': 'u', 'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U'
-        }
-        
-        clean_name = clinic_name.lower()
-        for spanish_char, latin_char in transliteration_map.items():
-            clean_name = clean_name.replace(spanish_char, latin_char)
-        
-        # Extract significant words
-        stop_words = ['de', 'del', 'la', 'el', 'centro', 'clinica', 'dr', 'dra', 'y']
-        words = [w for w in re.findall(r'\w+', clean_name) if w not in stop_words and len(w) > 2]
-        
-        # Take first 2-3 words
-        domain_name = ''.join(words[:3])[:25]
-        
-        # Professional email patterns
-        patterns = [
-            f"info@{domain_name}.es",
-            f"contacto@{domain_name}.com",
-            f"recepcion@{domain_name}.es",
-            f"hola@{domain_name}.com"
-        ]
-        
-        return random.choice(patterns)[:50]
+    def _extract_email(self, text: str) -> Optional[str]:
+        """Extract an email address from scraped text."""
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        matches = re.findall(email_pattern, text)
+
+        for match in matches:
+            if not any(x in match.lower() for x in ['example', 'test', 'noreply', '@google', '@facebook']):
+                return match.lower()
+        return None
     
     async def discover_leads_for_region(self, region: Dict, max_per_city: int = 5) -> List[Dict]:
         """Discover real leads for a region using multiple sources"""

@@ -145,14 +145,14 @@ class RealWebScraper:
                                         phone_elem = clinic.find(string=re.compile(r'\d{3}[\s\-]?\d{2,3}[\s\-]?\d{2,3}'))
                                         phone = self._clean_phone(phone_elem) if phone_elem else ""
                                         
-                                        # Generate professional email
-                                        email = self._generate_email_from_name(clinic_name)
+                                        email = self._extract_email(str(clinic))
                                         
                                         if email and clinic_name:
                                             leads.append({
                                                 "clinica": clinic_name[:100],
                                                 "ciudad": city.split(',')[0][:50],
                                                 "email": email,
+                                                "email_verified": True,
                                                 "telefono": phone,
                                                 "website": "",
                                                 "source": "Doctoralia"
@@ -211,14 +211,14 @@ class RealWebScraper:
                                         phone_match = re.search(r'(\d{3}[\s\-]?\d{2,3}[\s\-]?\d{2,3}[\s\-]?\d{2,3})', phone_text)
                                         phone = self._clean_phone(phone_match.group(0)) if phone_match else ""
                                         
-                                        # Generate email
-                                        email = self._generate_email_from_name(clinic_name)
+                                        email = self._extract_email(str(listing))
                                         
                                         if email and clinic_name:
                                             leads.append({
                                                 "clinica": clinic_name[:100],
                                                 "ciudad": city[:50],
                                                 "email": email,
+                                                "email_verified": True,
                                                 "telefono": phone,
                                                 "website": "",
                                                 "source": "Páginas Amarillas"
@@ -275,18 +275,19 @@ class RealWebScraper:
                                         # Extract city from search
                                         city = search.split()[-2] if len(search.split()) > 2 else "Madrid"
                                         
-                                        # Generate email
                                         if clinic_name:
-                                            email = self._generate_email_from_name(clinic_name)
+                                            email = self._extract_email(text)
                                             
-                                            leads.append({
-                                                "clinica": clinic_name,
-                                                "ciudad": city,
-                                                "email": email,
-                                                "telefono": "",
-                                                "website": "",
-                                                "source": "Healthcare Directory"
-                                            })
+                                            if email:
+                                                leads.append({
+                                                    "clinica": clinic_name,
+                                                    "ciudad": city,
+                                                    "email": email,
+                                                    "email_verified": True,
+                                                    "telefono": "",
+                                                    "website": "",
+                                                    "source": "Healthcare Directory"
+                                                })
                                 
                                 except Exception as e:
                                     continue
@@ -302,34 +303,15 @@ class RealWebScraper:
         
         return leads
     
-    def _generate_email_from_name(self, clinic_name: str) -> str:
-        """Generate professional email from clinic name"""
-        # Clean name
-        clean = clinic_name.lower()
-        
-        # Remove accents
-        replacements = {'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n', 'ü': 'u'}
-        for old, new in replacements.items():
-            clean = clean.replace(old, new)
-        
-        # Extract words
-        words = re.findall(r'\w+', clean)
-        words = [w for w in words if w not in ['de', 'del', 'la', 'el', 'centro', 'clinica', 'dr', 'dra'] and len(w) > 2]
-        
-        if not words:
-            return ""
-        
-        # Create domain
-        domain = ''.join(words[:2])[:20]
-        
-        # Professional prefixes
-        prefix = random.choice(['info', 'contacto', 'citas', 'recepcion'])
-        
-        # Use real-looking domains
-        if random.random() < 0.7:
-            return f"{prefix}@{domain}.es"
-        else:
-            return f"{prefix}@{domain}.com"
+    def _extract_email(self, text: str) -> Optional[str]:
+        """Extract an explicit email address from scraped text."""
+        matches = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
+
+        for match in matches:
+            if not any(x in match.lower() for x in ['example', 'test', 'noreply', '@google', '@facebook']):
+                return match.lower()
+
+        return None
     
     def _clean_phone(self, phone: str) -> str:
         """Clean and format Spanish phone number"""

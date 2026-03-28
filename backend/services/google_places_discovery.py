@@ -15,7 +15,9 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR.parent / '.env')
 load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR.parent / '.env.example')
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +76,12 @@ class GooglePlacesDiscovery:
     """
     
     def __init__(self):
-        self.api_key = os.environ.get('GOOGLE_API_KEY', '')
+        self.api_key = (
+            os.environ.get('GOOGLE_API_KEY')
+            or os.environ.get('GOOGLE_PLACES_API_KEY')
+            or os.environ.get('GOOGLE_MAPS_API_KEY')
+            or ''
+        )
         self.base_url = "https://maps.googleapis.com/maps/api/place"
         self.discovered_place_ids = set()  # Avoid duplicates
         
@@ -92,19 +99,8 @@ class GooglePlacesDiscovery:
         return False
     
     def _extract_email_from_website(self, website: str) -> Optional[str]:
-        """Generate potential email from website domain"""
-        if not website:
-            return None
-        
-        try:
-            # Extract domain
-            domain = website.replace("https://", "").replace("http://", "").replace("www.", "")
-            domain = domain.split("/")[0]
-            
-            # Common email patterns
-            return f"info@{domain}"
-        except:
-            return None
+        """Do not guess emails from domains; only explicitly extracted emails are allowed."""
+        return None
     
     def _normalize_phone(self, phone: str) -> str:
         """Normalize Spanish phone number"""
@@ -216,7 +212,7 @@ class GooglePlacesDiscovery:
                             if len(address_parts) >= 2:
                                 city = address_parts[-2].strip()
                             
-                            # Generate email from website
+                            # Do not invent domain-based emails.
                             email = self._extract_email_from_website(website)
                             
                             return {
@@ -225,6 +221,7 @@ class GooglePlacesDiscovery:
                                 "direccion": address,
                                 "telefono": self._normalize_phone(phone),
                                 "email": email,
+                                "email_verified": bool(email),
                                 "website": website,
                                 "fuente": "Google Places API",
                                 "estado": "Sin contactar",

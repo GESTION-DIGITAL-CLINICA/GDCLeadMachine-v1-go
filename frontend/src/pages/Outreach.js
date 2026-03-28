@@ -16,7 +16,11 @@ const Outreach = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 10000); // Refresh every 10s
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        loadData();
+      }
+    }, 20000); // Refresh every 20s when tab is visible
     return () => clearInterval(interval);
   }, []);
 

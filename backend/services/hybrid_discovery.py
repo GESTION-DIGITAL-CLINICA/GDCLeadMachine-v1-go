@@ -1,7 +1,7 @@
 """
 HYBRID Lead Discovery - Combines multiple reliable methods
 1. Real web data when available
-2. High-quality generated leads with realistic patterns
+2. Synthetic lead names for local testing only
 3. Uses real Spanish business databases
 """
 
@@ -14,7 +14,7 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 class HybridLeadDiscovery:
-    """Hybrid approach: Real web data + High-quality generated leads"""
+    """Hybrid approach: real web data plus synthetic lead names without email fabrication."""
     
     def __init__(self):
         self.session = None
@@ -40,8 +40,8 @@ class HybridLeadDiscovery:
         
         Strategy:
         1. Try to get real data from web APIs/databases
-        2. If web sources fail, generate high-quality realistic leads
-        3. Ensure all leads have valid format and realistic data
+        2. If web sources fail, generate clinic names without contact fabrication
+        3. Ensure generated leads cannot enter email sending without verification
         """
         logger.info("="*60)
         logger.info("🔍 HYBRID LEAD DISCOVERY - REAL DATA SOURCES")
@@ -59,13 +59,13 @@ class HybridLeadDiscovery:
         except Exception as e:
             logger.warning(f"⚠️  Web APIs unavailable: {str(e)}")
         
-        # Method 2: Generate high-quality leads with realistic patterns
+        # Method 2: Generate clinic names without invented contact emails
         remaining = max(0, max_leads - len(all_leads))
         if remaining > 0:
-            logger.info(f"📍 Method 2: Generating {remaining} high-quality realistic leads...")
+            logger.info(f"📍 Method 2: Generating {remaining} synthetic clinic names...")
             generated_leads = self.generate_realistic_leads(remaining)
             all_leads.extend(generated_leads)
-            logger.info(f"✅ Generated: {len(generated_leads)} realistic clinic leads")
+            logger.info(f"✅ Generated: {len(generated_leads)} synthetic clinic leads")
         
         logger.info("="*60)
         logger.info(f"✅ TOTAL LEADS DISCOVERED: {len(all_leads)}")
@@ -103,7 +103,8 @@ class HybridLeadDiscovery:
         #                 leads.append({
         #                     'clinica': place['name'],
         #                     'ciudad': place.get('vicinity', 'Madrid'),
-        #                     'email': f"info@{place['name'].lower().replace(' ', '')}.com",
+        #                     'email': None,
+        #                     'email_verified': False,
         #                     'telefono': place.get('formatted_phone_number', ''),
         #                     'website': place.get('website', ''),
         #                     'source': 'Google Places API'
@@ -189,14 +190,13 @@ class HybridLeadDiscovery:
                 names = ["García", "Martínez", "López", "Fernández", "Rodríguez", "Sánchez"]
                 clinic_name = pattern.format(f"Dr. {random.choice(names)}")
             
-            # Generate professional email (info@, contacto@, citas@)
-            email = self._generate_professional_email(clinic_name)
+            dedupe_key = f"{clinic_name}|{city}"
             
             # Skip duplicates
-            if email in self.discovered_emails:
+            if dedupe_key in self.discovered_emails:
                 continue
             
-            self.discovered_emails.add(email)
+            self.discovered_emails.add(dedupe_key)
             
             # Generate phone
             phone = self._generate_spanish_phone() if random.random() < 0.85 else ""
@@ -204,45 +204,14 @@ class HybridLeadDiscovery:
             leads.append({
                 "clinica": clinic_name,
                 "ciudad": city,
-                "email": email,
+                "email": None,
+                "email_verified": False,
                 "telefono": phone,
                 "website": "",
                 "source": "Hybrid Discovery"
             })
         
         return leads
-    
-    def _generate_professional_email(self, clinic_name: str) -> str:
-        """Generate realistic professional email"""
-        import re
-        
-        clean = clinic_name.lower()
-        
-        # Remove accents
-        replacements = {
-            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-            'ñ': 'n', 'ü': 'u'
-        }
-        for old, new in replacements.items():
-            clean = clean.replace(old, new)
-        
-        # Extract meaningful words
-        words = re.findall(r'\w+', clean)
-        words = [w for w in words if w not in ['de', 'del', 'la', 'el', 'dr', 'dra', 'centro', 'clinica'] and len(w) > 2]
-        
-        if not words:
-            words = ['clinica', 'salud']
-        
-        # Create domain
-        domain = ''.join(words[:2])[:18]
-        
-        # Professional prefixes (common in Spanish businesses)
-        prefix = random.choice(['info', 'contacto', 'citas', 'recepcion', 'hola'])
-        
-        # Use realistic domains
-        domain_ext = random.choice(['.es', '.com', '.net'])
-        
-        return f"{prefix}@{domain}{domain_ext}"
     
     def _generate_spanish_phone(self) -> str:
         """Generate realistic Spanish phone number"""

@@ -19,6 +19,18 @@ class EmailQueueService:
     
     def load_email_accounts(self):
         """Load email accounts from environment"""
+        def _is_placeholder_password(password: str) -> bool:
+            if not password:
+                return True
+            normalized = password.strip().lower()
+            return normalized in {
+                "your_email_password",
+                "your_password",
+                "password",
+                "changeme",
+                "change_me",
+            }
+
         accounts = []
         i = 1
         while True:
@@ -27,6 +39,13 @@ class EmailQueueService:
             
             if not username or not password:
                 break
+
+            if _is_placeholder_password(password):
+                logger.warning(
+                    f"Skipping EMAIL_{i}_USERNAME because password appears to be a placeholder"
+                )
+                i += 1
+                continue
             
             accounts.append({
                 "username": username,
@@ -58,6 +77,10 @@ class EmailQueueService:
     async def add_to_queue(self, clinic_id: str, clinic_data: Dict):
         """Add clinic to email queue"""
         try:
+            if not clinic_data.get("email") or clinic_data.get("email_verified") is not True:
+                logger.info(f"Skipping unverified email for queue: {clinic_data.get('clinica')}")
+                return
+
             queue_item = {
                 "clinic_id": clinic_id,
                 "clinic_data": clinic_data,
@@ -99,6 +122,28 @@ class EmailQueueService:
             if not account:
                 logger.debug("No email accounts available (respecting rate limits)")
                 return
+
+            blocked_result = await self.db.email_queue.update_many(
+                {
+                    "status": "pending",
+                    "$or": [
+                        {"clinic_data.email": {"$exists": False}},
+                        {"clinic_data.email": ""},
+                        {"clinic_data.email": None},
+                        {"clinic_data.email_verified": {"$ne": True}}
+                    ]
+                },
+                {
+                    "$set": {
+                        "status": "blocked_unverified",
+                        "blocked_at": datetime.utcnow(),
+                        "block_reason": "Email missing or not verified"
+                    }
+                }
+            )
+
+            if blocked_result.modified_count:
+                logger.warning(f"Blocked {blocked_result.modified_count} unverified email queue items")
             
             # Get next pending email from queue with projection
             projection = {
@@ -111,7 +156,8 @@ class EmailQueueService:
             
             pending_email = await self.db.email_queue.find_one({
                 "status": "pending",
-                "attempts": {"$lt": 3}
+                "attempts": {"$lt": 3},
+                "clinic_data.email_verified": True
             }, projection)
             
             if not pending_email:

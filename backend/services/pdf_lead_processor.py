@@ -1,7 +1,7 @@
 """
 PDF Lead Processor Service
 Processes clinic data from PDF extractions and imports into the database.
-Handles deduplication, filtering large corporations, and email generation.
+Handles deduplication and filtering large corporations.
 """
 
 import logging
@@ -73,33 +73,13 @@ class PDFLeadProcessor:
             cleaned = f"+34{cleaned}"
         return cleaned
     
-    def _generate_email(self, clinic_name: str, city: str) -> Optional[str]:
-        """Generate a potential email address for clinics without one"""
-        # Clean clinic name for email
-        name_cleaned = clinic_name.lower()
-        name_cleaned = re.sub(r'[^a-z0-9\s]', '', name_cleaned)
-        name_cleaned = name_cleaned.strip().replace(' ', '')[:20]
-        
-        if not name_cleaned:
-            return None
-        
-        # Common Spanish clinic email patterns
-        patterns = [
-            f"info@{name_cleaned}.es",
-            f"contacto@{name_cleaned}.es",
-            f"{name_cleaned}@gmail.com"
-        ]
-        
-        # Return first pattern (can be enhanced with actual email verification)
-        return patterns[0]
-    
     def _clean_clinic_data(self, raw_clinic: Dict) -> Optional[Dict]:
         """Clean and normalize clinic data"""
         clinic_name = raw_clinic.get("clinic_name", "").strip()
         city = raw_clinic.get("city", "").strip()
         address = raw_clinic.get("address", "").strip()
         phones = raw_clinic.get("phone_numbers", [])
-        email = raw_clinic.get("email")
+        email = (raw_clinic.get("email") or "").strip().lower() or None
         
         # Skip if no name
         if not clinic_name or len(clinic_name) < 3:
@@ -115,10 +95,6 @@ class PDFLeadProcessor:
         primary_phone = ""
         if phones and len(phones) > 0:
             primary_phone = self._normalize_phone(phones[0])
-        
-        # Generate email if not available
-        if not email:
-            email = self._generate_email(clinic_name, city)
         
         # Skip if no contact info at all
         if not primary_phone and not email:
@@ -141,6 +117,7 @@ class PDFLeadProcessor:
             "direccion": address,
             "telefono": primary_phone,
             "email": email,
+            "email_verified": bool(email),
             "website": "",
             "fuente": "PDF Import - Cuadro Médico",
             "estado": "Sin contactar",

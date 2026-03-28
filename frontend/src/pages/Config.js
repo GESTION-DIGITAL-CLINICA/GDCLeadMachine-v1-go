@@ -19,7 +19,11 @@ const Config = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 10000);
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        loadData();
+      }
+    }, 20000);
     return () => clearInterval(interval);
   }, []);
 

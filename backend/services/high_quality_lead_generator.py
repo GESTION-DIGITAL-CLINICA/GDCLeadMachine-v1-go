@@ -1,6 +1,6 @@
 """
 HIGH-QUALITY Lead Generator for GDC LeadMachine
-Generates realistic healthcare clinic leads for immediate testing and demonstration
+Generates synthetic healthcare clinic leads for testing without fabricated email addresses
 """
 
 import logging
@@ -10,10 +10,10 @@ import random
 logger = logging.getLogger(__name__)
 
 class HighQualityLeadGenerator:
-    """Generates realistic, high-quality healthcare clinic leads"""
+    """Generates synthetic healthcare clinic leads without email fabrication."""
     
     def __init__(self):
-        self.generated_emails = set()
+        self.generated_leads = set()
     
     def generate_leads(self, count: int = 50) -> List[Dict]:
         """
@@ -105,14 +105,13 @@ class HighQualityLeadGenerator:
                 # Just city name
                 clinic_name = name_pattern.format(city)
             
-            # Generate realistic email
-            email = self._generate_email(clinic_name, city)
+            lead_key = f"{clinic_name}|{city}"
             
             # Skip if duplicate
-            if email in self.generated_emails:
+            if lead_key in self.generated_leads:
                 continue
             
-            self.generated_emails.add(email)
+            self.generated_leads.add(lead_key)
             
             # Generate phone number (Spanish format)
             phone = self._generate_phone()
@@ -120,7 +119,8 @@ class HighQualityLeadGenerator:
             leads.append({
                 "clinica": clinic_name,
                 "ciudad": city,
-                "email": email,
+                "email": None,
+                "email_verified": False,
                 "telefono": phone if random.random() < 0.8 else "",  # 80% have phones
                 "website": "",
                 "source": "High-Quality Generator"
@@ -128,42 +128,6 @@ class HighQualityLeadGenerator:
         
         logger.info(f"✅ Generated {len(leads)} high-quality leads")
         return leads
-    
-    def _generate_email(self, clinic_name: str, city: str) -> str:
-        """Generate realistic professional email"""
-        # Clean clinic name
-        clean_name = clinic_name.lower()
-        clean_name = clean_name.replace("clínica", "").replace("centro", "")
-        clean_name = clean_name.replace("de", "").strip()
-        
-        # Remove accents
-        replacements = {
-            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-            'ñ': 'n', 'ü': 'u'
-        }
-        for old, new in replacements.items():
-            clean_name = clean_name.replace(old, new)
-        
-        # Get first 2-3 words
-        words = [w for w in clean_name.split() if len(w) > 2][:2]
-        domain_part = "".join(words).replace(" ", "")[:15]
-        
-        # Email prefixes
-        prefixes = ["info", "contacto", "citas", "recepcion", "admin"]
-        prefix = random.choice(prefixes)
-        
-        # Domains (realistic Spanish domains)
-        domains = [
-            f"{domain_part}.com",
-            f"{domain_part}.es",
-            "gmail.com",
-            "hotmail.es",
-            "outlook.es"
-        ]
-        
-        domain = random.choice(domains)
-        
-        return f"{prefix}@{domain}"
     
     def _generate_phone(self) -> str:
         """Generate realistic Spanish phone number"""

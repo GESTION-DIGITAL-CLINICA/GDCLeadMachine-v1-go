@@ -21,7 +21,11 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000);
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        loadData();
+      }
+    }, 45000);
     return () => clearInterval(interval);
   }, []);
 

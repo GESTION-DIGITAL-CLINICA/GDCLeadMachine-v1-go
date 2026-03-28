@@ -16,6 +16,7 @@ from pathlib import Path
 
 # Load environment
 ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR.parent / '.env')
 load_dotenv(ROOT_DIR / '.env')
 
 # Sample clinic data extracted from PDFs - these are actual small clinics filtered from the PDF
@@ -36,14 +37,14 @@ SAMPLE_CLINICS_FROM_PDF = [
     {"clinic_name": "Clínica Médica El Elcoro", "city": "Alcorcón", "address": "C/ Béquer 1", "phone_numbers": ["916 652 780"], "email": None},
     {"clinic_name": "Clínica Médica El Restón", "city": "Valdemoro", "address": "Avd Mediterráneo (Edif. Cristal) 3", "phone_numbers": ["918 954 773", "918 954 957"], "email": None},
     # Additional small clinics
-    {"clinic_name": "Centro Médico Carabanchel", "city": "Madrid", "address": "C/ General Ricardos 45", "phone_numbers": ["915 112 233"], "email": "info@cmcarabanchel.es"},
-    {"clinic_name": "Clínica Dental Dr. García", "city": "Leganés", "address": "C/ Juan de Austria 12", "phone_numbers": ["916 887 654"], "email": "drgarcia@clinicadental.es"},
-    {"clinic_name": "Fisioterapia Majadahonda", "city": "Majadahonda", "address": "Avd de España 33", "phone_numbers": ["916 342 111"], "email": "contacto@fisiomajadahonda.com"},
+    {"clinic_name": "Centro Médico Carabanchel", "city": "Madrid", "address": "C/ General Ricardos 45", "phone_numbers": ["915 112 233"], "email": None},
+    {"clinic_name": "Clínica Dental Dr. García", "city": "Leganés", "address": "C/ Juan de Austria 12", "phone_numbers": ["916 887 654"], "email": None},
+    {"clinic_name": "Fisioterapia Majadahonda", "city": "Majadahonda", "address": "Avd de España 33", "phone_numbers": ["916 342 111"], "email": None},
     {"clinic_name": "Centro Podológico Sur", "city": "Getafe", "address": "C/ Madrid 88", "phone_numbers": ["916 451 890"], "email": None},
-    {"clinic_name": "Clínica Oftalmológica Visión Clara", "city": "Alcalá de Henares", "address": "Plz de los Santos Niños 4", "phone_numbers": ["918 881 234"], "email": "citas@visionclara.es"},
+    {"clinic_name": "Clínica Oftalmológica Visión Clara", "city": "Alcalá de Henares", "address": "Plz de los Santos Niños 4", "phone_numbers": ["918 881 234"], "email": None},
     {"clinic_name": "Centro Médico Familiar Arganzuela", "city": "Madrid", "address": "Pso de las Delicias 67", "phone_numbers": ["914 735 678"], "email": None},
-    {"clinic_name": "Policlínica San Fernando", "city": "San Fernando de Henares", "address": "C/ Constitución 23", "phone_numbers": ["916 738 901"], "email": "info@policlinicasanfernando.es"},
-    {"clinic_name": "Clínica Dermatológica Piel Sana", "city": "Pozuelo de Alarcón", "address": "C/ Jesusa Lara 15", "phone_numbers": ["917 151 234"], "email": "contacto@pielsana.es"},
+    {"clinic_name": "Policlínica San Fernando", "city": "San Fernando de Henares", "address": "C/ Constitución 23", "phone_numbers": ["916 738 901"], "email": None},
+    {"clinic_name": "Clínica Dermatológica Piel Sana", "city": "Pozuelo de Alarcón", "address": "C/ Jesusa Lara 15", "phone_numbers": ["917 151 234"], "email": None},
 ]
 
 async def import_leads():

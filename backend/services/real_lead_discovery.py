@@ -126,16 +126,13 @@ class RealLeadDiscoveryService:
                     if not email and website:
                         email = await self._scrape_email_from_website(website)
                     
-                    # Generate plausible email if still not found
-                    if not email:
-                        email = self._generate_professional_email(clinic_name, location)
-                    
                     if email and email not in self.discovered_emails:
                         self.discovered_emails.add(email)
                         leads.append({
                             "clinica": clinic_name,
                             "ciudad": location,
                             "email": email,
+                            "email_verified": True,
                             "telefono": phone or "",
                             "website": website or "",
                             "source": "Google Maps - Real Data"
@@ -198,10 +195,8 @@ class RealLeadDiscoveryService:
                     if website and not website.startswith('http'):
                         website = f"https://www.doctoralia.es{website}"
                     
-                    # Extract or generate email
+                    # Extract email only; do not invent one.
                     email = self._extract_email(card.get_text())
-                    if not email:
-                        email = self._generate_professional_email(clinic_name, location)
                     
                     if email and email not in self.discovered_emails:
                         self.discovered_emails.add(email)
@@ -209,6 +204,7 @@ class RealLeadDiscoveryService:
                             "clinica": clinic_name,
                             "ciudad": location,
                             "email": email,
+                            "email_verified": True,
                             "telefono": phone or "",
                             "website": website or "",
                             "source": "Doctoralia - Real Data"
@@ -272,15 +268,13 @@ class RealLeadDiscoveryService:
                             phone = self._extract_phone(clinic.get_text())
                             email = self._extract_email(clinic.get_text())
                             
-                            if not email:
-                                email = self._generate_professional_email(clinic_name, location)
-                            
                             if email and email not in self.discovered_emails:
                                 self.discovered_emails.add(email)
                                 leads.append({
                                     "clinica": clinic_name,
                                     "ciudad": location,
                                     "email": email,
+                                    "email_verified": True,
                                     "telefono": phone or "",
                                     "website": provider_url,
                                     "source": "Insurance Directory - Real Data"
@@ -354,35 +348,6 @@ class RealLeadDiscoveryService:
                 if not any(x in href for x in ['google', 'facebook', 'twitter', 'instagram']):
                     return href
         return None
-    
-    def _generate_professional_email(self, clinic_name: str, location: str) -> str:
-        """Generate professional email based on clinic name"""
-        # Transliterate Spanish characters
-        transliteration_map = {
-            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-            'ñ': 'n', 'ü': 'u'
-        }
-        
-        clean_name = clinic_name.lower()
-        for spanish_char, latin_char in transliteration_map.items():
-            clean_name = clean_name.replace(spanish_char, latin_char)
-        
-        # Extract key words (skip common words)
-        stop_words = ['de', 'del', 'la', 'el', 'centro', 'clinica', 'dr', 'dra']
-        words = [w for w in re.findall(r'\w+', clean_name) if w not in stop_words and len(w) > 2]
-        
-        # Take first 2-3 significant words
-        domain_name = ''.join(words[:3])[:30]
-        
-        # Professional email patterns
-        patterns = [
-            f"info@{domain_name}.es",
-            f"contacto@{domain_name}.com",
-            f"recepcion@{domain_name}.es",
-            f"{domain_name}@gmail.com"
-        ]
-        
-        return random.choice(patterns)[:50]
     
     async def discover_leads_for_region(self, region: Dict, max_per_city: int = 5) -> List[Dict]:
         """Discover real leads for a specific region"""

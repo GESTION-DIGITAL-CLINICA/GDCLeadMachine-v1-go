@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Target, Play, MapPin, Sparkles, AlertCircle } from 'lucide-react';
 import axios from 'axios';
+import { getDashboardStats } from '../services/api';
 import { useToast } from '../hooks/use-toast';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -17,17 +18,21 @@ const Prospeccion = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 15000);
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        loadData();
+      }
+    }, 25000);
     return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
     try {
       const [statsData, statusData] = await Promise.all([
-        axios.get(`${API}/stats/dashboard`),
+        getDashboardStats(),
         axios.get(`${API}/discovery/status`)
       ]);
-      setStats(statsData.data);
+      setStats(statsData);
       setDiscoveryStatus(statusData.data);
     } catch (error) {
       console.error('Error loading data:', error);

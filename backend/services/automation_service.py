@@ -80,6 +80,7 @@ class AutomationService:
             clinic_data["scoring_details"] = scoring_result["details"]
             clinic_data["fuente"] = source
             clinic_data["estado"] = "Sin contactar"
+            clinic_data["email_verified"] = clinic_data.get("email_verified") is True and bool(clinic_data.get("email"))
             
             logger.info(f"Scored {clinic_data.get('clinica')}: {scoring_result['score']}/10")
             
@@ -95,7 +96,7 @@ class AutomationService:
                 queued_channels = []
                 
                 # Step 4a: Queue email
-                if self.email_queue_service:
+                if self.email_queue_service and clinic_data.get("email_verified"):
                     await self.email_queue_service.add_to_queue(clinic_id, clinic_data)
                     queued_channels.append("email")
                     logger.info(f"Clinic added to email queue: {clinic_data.get('clinica')}")

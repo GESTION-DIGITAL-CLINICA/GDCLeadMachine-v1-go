@@ -9,8 +9,15 @@ import os
 import logging
 import uuid
 import asyncio
+import time
 from datetime import datetime
 from bson import ObjectId
+
+# Load environment variables before importing services.
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR.parent / '.env')
+load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR.parent / '.env.example')
 
 # Import services
 from services.notion_service import notion_service
@@ -21,15 +28,31 @@ from services.automation_service import automation_service
 from services.discovery_scheduler import DiscoveryScheduler
 from services.inbox_monitor_service import InboxMonitorService
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Lightweight in-process cache for high-frequency stats endpoints.
+_response_cache: Dict[str, Dict[str, Any]] = {}
+
+
+def _cache_get(key: str, ttl_seconds: int):
+    entry = _response_cache.get(key)
+    if not entry:
+        return None
+    if (time.time() - entry["ts"]) > ttl_seconds:
+        return None
+    return entry["value"]
+
+
+def _cache_set(key: str, value: Any):
+    _response_cache[key] = {
+        "ts": time.time(),
+        "value": value,
+    }
 
 # Helper function to convert ObjectIds to strings
 def convert_objectids(obj):
@@ -262,16 +285,24 @@ async def get_email_accounts():
 async def get_email_stats():
     """Get email statistics"""
     try:
-        total_sent = await db.email_queue.count_documents({"status": "sent"})
-        pending = await db.email_queue.count_documents({"status": "pending"})
-        failed = await db.email_queue.count_documents({"status": "failed"})
-        
-        return {
+        cached = _cache_get("email_stats", ttl_seconds=5)
+        if cached is not None:
+            return cached
+
+        total_sent, pending, failed = await asyncio.gather(
+            db.email_queue.count_documents({"status": "sent"}),
+            db.email_queue.count_documents({"status": "pending"}),
+            db.email_queue.count_documents({"status": "failed"}),
+        )
+
+        payload = {
             "total_sent": total_sent,
             "pending": pending,
             "failed": failed,
             "active_accounts": len(email_queue_service_instance.email_accounts)
         }
+        _cache_set("email_stats", payload)
+        return payload
     except Exception as e:
         logger.error(f"Error getting email stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -339,12 +370,25 @@ async def upload_attachment(file: UploadFile = File(...)):
 async def get_dashboard_stats():
     """Get dashboard statistics"""
     try:
-        total_leads = await db.clinics.count_documents({})
-        emails_sent = await db.email_queue.count_documents({"status": "sent"})
-        responded = await db.clinics.count_documents({"estado": "Respondió"})
-        clients = await db.clinics.count_documents({"estado": "Cliente"})
-        high_score = await db.clinics.count_documents({"score": {"$gte": 7}})
-        pending_followups = await db.clinics.count_documents({"estado": "Seguimiento pendiente"})
+        cached = _cache_get("dashboard_stats", ttl_seconds=10)
+        if cached is not None:
+            return cached
+
+        (
+            total_leads,
+            emails_sent,
+            responded,
+            clients,
+            high_score,
+            pending_followups,
+        ) = await asyncio.gather(
+            db.clinics.count_documents({}),
+            db.email_queue.count_documents({"status": "sent"}),
+            db.clinics.count_documents({"estado": "Respondió"}),
+            db.clinics.count_documents({"estado": "Cliente"}),
+            db.clinics.count_documents({"score": {"$gte": 7}}),
+            db.clinics.count_documents({"estado": "Seguimiento pendiente"}),
+        )
         
         # Group by Comunidad Autónoma
         by_region = await db.clinics.aggregate([
@@ -352,7 +396,7 @@ async def get_dashboard_stats():
             {"$sort": {"count": -1}}
         ]).to_list(20)
         
-        return {
+        payload = {
             "total_leads": total_leads,
             "emails_sent": emails_sent,
             "responded": responded,
@@ -362,6 +406,8 @@ async def get_dashboard_stats():
             "response_rate": round((responded / emails_sent * 100) if emails_sent > 0 else 0, 2),
             "by_region": by_region
         }
+        _cache_set("dashboard_stats", payload)
+        return payload
     except Exception as e:
         logger.error(f"Error getting dashboard stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -438,18 +484,30 @@ async def import_pdf_leads(pdf_data: List[dict]):
 async def get_automation_status():
     """Get full 24/7 automation status"""
     try:
+        cached = _cache_get("automation_status", ttl_seconds=5)
+        if cached is not None:
+            return cached
+
         # Get queue counts
-        email_pending = await db.email_queue.count_documents({"status": "pending"})
-        email_sent = await db.email_queue.count_documents({"status": "sent"})
-        email_failed = await db.email_queue.count_documents({"status": "failed"})
-        
-        whatsapp_pending = await db.whatsapp_queue.count_documents({"status": "pending"})
-        whatsapp_sent = await db.whatsapp_queue.count_documents({"status": "sent"})
-        
-        # Get lead counts
-        total_leads = await db.clinics.count_documents({})
-        pending_leads = await db.clinics.count_documents({"estado": "Sin contactar"})
-        in_queue = await db.clinics.count_documents({"estado": "En cola de contacto"})
+        (
+            email_pending,
+            email_sent,
+            email_failed,
+            whatsapp_pending,
+            whatsapp_sent,
+            total_leads,
+            pending_leads,
+            in_queue,
+        ) = await asyncio.gather(
+            db.email_queue.count_documents({"status": "pending"}),
+            db.email_queue.count_documents({"status": "sent"}),
+            db.email_queue.count_documents({"status": "failed"}),
+            db.whatsapp_queue.count_documents({"status": "pending"}),
+            db.whatsapp_queue.count_documents({"status": "sent"}),
+            db.clinics.count_documents({}),
+            db.clinics.count_documents({"estado": "Sin contactar"}),
+            db.clinics.count_documents({"estado": "En cola de contacto"}),
+        )
         
         # Get scheduler jobs
         jobs = []
@@ -459,7 +517,7 @@ async def get_automation_status():
                 "next_run": str(job.next_run_time) if job.next_run_time else None
             })
         
-        return {
+        payload = {
             "automation_active": True,
             "google_places_api": {
                 "enabled": discovery_scheduler_instance.google_api_enabled,
@@ -488,6 +546,8 @@ async def get_automation_status():
                 "in_queue": in_queue
             }
         }
+        _cache_set("automation_status", payload)
+        return payload
     except Exception as e:
         logger.error(f"Error getting automation status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -600,22 +660,33 @@ async def get_clinic_contact_history(clinic_id: str, method: Optional[str] = Non
 async def get_contacts_summary():
     """Get overall contact statistics"""
     try:
+        cached = _cache_get("contacts_summary", ttl_seconds=5)
+        if cached is not None:
+            return cached
+
         summary = await contact_history_service_instance.get_all_contacts_summary()
         
         # Get queue stats
+        pending, sent, failed = await asyncio.gather(
+            db.email_queue.count_documents({"status": "pending"}),
+            db.email_queue.count_documents({"status": "sent"}),
+            db.email_queue.count_documents({"status": "failed"}),
+        )
         email_stats = {
-            "pending": await db.email_queue.count_documents({"status": "pending"}),
-            "sent": await db.email_queue.count_documents({"status": "sent"}),
-            "failed": await db.email_queue.count_documents({"status": "failed"})
+            "pending": pending,
+            "sent": sent,
+            "failed": failed,
         }
         
         whatsapp_stats = await whatsapp_queue_service_instance.get_queue_stats()
         
-        return {
+        payload = {
             "contact_summary": summary,
             "email_queue": email_stats,
             "whatsapp_queue": whatsapp_stats
         }
+        _cache_set("contacts_summary", payload)
+        return payload
     except Exception as e:
         logger.error(f"Error getting contacts summary: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -724,12 +795,15 @@ async def startup_event():
     try:
         logger.info("Creating database indexes...")
         await db.email_queue.create_index([("status", 1), ("attempts", 1)])
+        await db.email_queue.create_index([("status", 1), ("clinic_data.email_verified", 1), ("attempts", 1)])
+        await db.email_queue.create_index([("clinic_id", 1)])
         await db.whatsapp_queue.create_index([("status", 1), ("attempts", 1)])
         await db.contact_history.create_index([("clinic_id", 1), ("timestamp", -1)])
         await db.contact_history.create_index([("method", 1), ("status", 1)])
         await db.clinics.create_index([("comunidad_autonoma", 1)])
         await db.clinics.create_index([("score", 1)])
         await db.clinics.create_index([("estado", 1)])
+        await db.clinics.create_index([("estado", 1), ("email_verified", 1)])
         await db.clinics.create_index([("email_bounced", 1)])
         await db.email_bounces.create_index([("bounced_email", 1)], unique=True)
         logger.info("Database indexes created successfully")
