@@ -12,7 +12,13 @@ mkdir -p "$RUNTIME_DIR" "$LOG_DIR"
 
 start_backend() {
   if lsof -i tcp:8001 -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "Skipping backend supervisor: port 8001 is already in use"
+    existing_pid="$(lsof -ti tcp:8001 -sTCP:LISTEN | head -n 1 || true)"
+    if [[ -n "$existing_pid" ]]; then
+      echo "$existing_pid" > "$BACKEND_PID_FILE"
+      echo "Adopted existing backend process on port 8001 (PID $existing_pid)"
+    else
+      echo "Skipping backend supervisor: port 8001 is already in use"
+    fi
     return
   fi
 
@@ -39,7 +45,13 @@ start_backend() {
 
 start_frontend() {
   if lsof -i tcp:3000 -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "Skipping frontend supervisor: port 3000 is already in use"
+    existing_pid="$(lsof -ti tcp:3000 -sTCP:LISTEN | head -n 1 || true)"
+    if [[ -n "$existing_pid" ]]; then
+      echo "$existing_pid" > "$FRONTEND_PID_FILE"
+      echo "Adopted existing frontend process on port 3000 (PID $existing_pid)"
+    else
+      echo "Skipping frontend supervisor: port 3000 is already in use"
+    fi
     return
   fi
 
