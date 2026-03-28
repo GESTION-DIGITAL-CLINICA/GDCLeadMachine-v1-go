@@ -329,6 +329,122 @@ class TestWhatsAppAPI:
         print(f"✓ WhatsApp bulk endpoint: {data}")
 
 
+class TestRunAPI:
+    """Test-run tracking endpoint tests"""
+
+    def test_mcp_manifest(self):
+        """Test the /mcp endpoint returns a valid MCP manifest"""
+        response = requests.get(f"{BASE_URL}/mcp")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["schema_version"] == "v1"
+        assert "name" in data
+        assert "tools" in data
+        assert isinstance(data["tools"], list)
+        assert len(data["tools"]) > 0
+
+        # Every tool must have name, method, path
+        for tool in data["tools"]:
+            assert "name" in tool
+            assert "method" in tool
+            assert "path" in tool
+
+        print(f"✓ MCP manifest: {len(data['tools'])} tools advertised")
+
+    def test_discovery_status_has_cumulative_stats(self):
+        """Test /api/discovery/status now returns cumulative cycle stats"""
+        response = requests.get(f"{BASE_URL}/api/discovery/status")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "cumulative_new_clinics_discovered" in data
+        assert "cumulative_leads_processed" in data
+        assert "last_cycle_new_clinics" in data
+
+        print(f"✓ Discovery status cumulative stats: {data}")
+
+    def test_start_and_finish_test_run(self):
+        """Test starting and immediately finishing a test run"""
+        # Finish any previously running test so the start doesn't conflict.
+        requests.post(f"{BASE_URL}/api/test-run/finish")
+
+        # Start a short test run
+        start_resp = requests.post(
+            f"{BASE_URL}/api/test-run/start",
+            json={"duration_hours": 0.01, "notes": "pytest automated test"},
+        )
+        assert start_resp.status_code == 200, start_resp.text
+        start_data = start_resp.json()
+
+        assert "run_id" in start_data
+        assert start_data["status"] == "running"
+        assert "baseline_stats" in start_data
+        run_id = start_data["run_id"]
+
+        print(f"✓ Test run started: run_id={run_id}")
+
+        # Get live status
+        status_resp = requests.get(f"{BASE_URL}/api/test-run/status")
+        assert status_resp.status_code == 200
+        status_data = status_resp.json()
+        assert status_data["run_id"] == run_id
+        print(f"✓ Test run status: elapsed={status_data.get('elapsed_minutes')} min")
+
+        # Finish the run early
+        finish_resp = requests.post(f"{BASE_URL}/api/test-run/finish")
+        assert finish_resp.status_code == 200, finish_resp.text
+        finish_data = finish_resp.json()
+
+        assert finish_data["status"] == "completed"
+        assert "new_clinics_found" in finish_data
+        assert "emails_sent_to_real_leads" in finish_data
+        assert finish_data["run_id"] == run_id
+
+        print(
+            f"✓ Test run finished: new_clinics={finish_data['new_clinics_found']}, "
+            f"emails_sent={finish_data['emails_sent_to_real_leads']}"
+        )
+
+        # Retrieve persisted report by run_id
+        report_resp = requests.get(f"{BASE_URL}/api/test-run/report/{run_id}")
+        assert report_resp.status_code == 200
+        report_data = report_resp.json()
+        assert report_data["status"] == "completed"
+        print(f"✓ Test run report retrieved: {report_data}")
+
+    def test_test_run_history(self):
+        """Test listing test run history"""
+        response = requests.get(f"{BASE_URL}/api/test-run/history")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        print(f"✓ Test run history: {len(data)} runs found")
+
+    def test_duplicate_test_run_rejected(self):
+        """Test that starting a second run while one is active returns 409"""
+        # Clean slate
+        requests.post(f"{BASE_URL}/api/test-run/finish")
+
+        # Start run 1
+        r1 = requests.post(
+            f"{BASE_URL}/api/test-run/start",
+            json={"duration_hours": 0.5, "notes": "first"},
+        )
+        assert r1.status_code == 200, r1.text
+
+        # Attempt to start run 2 immediately — should be rejected
+        r2 = requests.post(
+            f"{BASE_URL}/api/test-run/start",
+            json={"duration_hours": 0.5, "notes": "second"},
+        )
+        assert r2.status_code == 409, r2.text
+        print(f"✓ Duplicate run rejected with 409: {r2.json()}")
+
+        # Clean up
+        requests.post(f"{BASE_URL}/api/test-run/finish")
+
+
 # Run tests if executed directly
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

@@ -5,6 +5,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 import logging
 from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,11 @@ class DiscoveryScheduler:
             or ''
         )
         self.google_api_enabled = bool(self.google_api_key)
+        # Cumulative stats updated after each cycle
+        self.total_new_clinics_discovered: int = 0
+        self.total_leads_processed: int = 0
+        self.last_cycle_new_clinics: int = 0
+        self.last_cycle_at: Optional[datetime] = None
         logger.info("Discovery Scheduler initialized - 24/7 automated mode")
         if self.google_api_enabled:
             logger.info("🗺️ Google Places API ENABLED - Real lead discovery active!")
@@ -204,6 +210,12 @@ class DiscoveryScheduler:
             # Final stats
             new_count = await self.db.clinics.count_documents({})
             email_queue_count = await self.db.email_queue.count_documents({"status": "pending"})
+
+            # Update cumulative scheduler stats
+            self.last_cycle_new_clinics = new_discovered
+            self.last_cycle_at = datetime.utcnow()
+            self.total_new_clinics_discovered += new_discovered
+            self.total_leads_processed += processed
             
             logger.info("="*60)
             logger.info("📊 AUTOMATED CYCLE COMPLETE")
