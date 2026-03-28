@@ -246,9 +246,9 @@ class TestRunService:
             except Exception:
                 pass
 
-        report = self._build_report(
-            {**doc, "final_stats": live_stats or doc.get("final_stats")}
-        )
+        report = self._build_report(doc)
+        if live_stats is not None:
+            report["live_stats"] = live_stats
         report["elapsed_minutes"] = elapsed_minutes
         report["remaining_minutes"] = remaining_minutes
         return report
